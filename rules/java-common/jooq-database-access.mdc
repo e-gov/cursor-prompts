@@ -1,0 +1,153 @@
+---
+description: jOOQ DSL and database access conventions for type-safe Java data access
+globs: **/*.java
+alwaysApply: true
+---
+# jOOQ DSL and Database Access Conventions
+
+## Context
+- Apply when writing or modifying database access logic using jOOQ, typically within service or repository classes.
+- Focuses on consistent use of the jOOQ DSL and mapping.
+- **Retry Logic:** Retry mechanisms are framework-specific. Refer to:
+    - Spring Boot: `mdc:rules/java-spring-boot/spring-retry-conventions.mdc`
+    - Micronaut: `mdc:rules/java-micronaut/micronaut-retry-conventions.mdc`
+- **Transaction Management:** Managed by the specific framework (Spring/Micronaut). Refer to framework convention rules.
+- **Auditing:** For conventions on using the `AuditLogger`, see `mdc:rules/java-common/audit-logging.mdc`.
+
+## Requirements
+- **Database Interaction:** Use jOOQ (`DSLContext`) injected via constructor for all database operations. Avoid Spring Data JPA repositories or raw JDBC.
+- **Type-Safe DSL:** ALWAYS use the jOOQ type-safe DSL (generated tables/fields like `BOOK.TITLE`) over constructing queries with raw SQL strings.
+- **Mapping:** Implement clear logic (e.g., dedicated private methods like `mapToXyz`) to map jOOQ `Record` objects to application DTOs/models (`BookResponse`, etc.).
+- **Connection Handling:** Rely on the framework's transaction management (Spring/Micronaut) and jOOQ integration for connection handling; do not manage connections manually.
+
+## Examples
+<example>
+  # Good: jOOQ Type-Safe DSL Query in a Service Method
+  ```java
+  // Assuming BOOK is the generated jOOQ table class
+  import static ee.smit.jooq.Tables.BOOK;
+
+  // ... inside a service method (retry/transaction/audit handled by framework/other rules) ...
+  public List<BookResponse> findCheapBooks() {
+      // The actual DB call might be wrapped by retry logic elsewhere (see specific retry rules)
+      List<BookResponse> cheapBooks = dsl.selectFrom(BOOK)
+          .where(BOOK.PRICE.lt(BigDecimal.TEN)) // Type-safe condition
+          .orderBy(BOOK.TITLE.asc())
+          .fetchStream()
+          .map(this::mapToBookResponse) // Mapping function
+          .toList();
+
+      // Auditing is handled separately (see mdc:rules/java-common/audit-logging.mdc)
+      // if (!cheapBooks.isEmpty()) { AuditLogger.logBatchOperation(...); }
+
+      return cheapBooks;
+  }
+
+  private BookResponse mapToBookResponse(BookRecord record) {
+    // ... mapping implementation ...
+  }
+  ```
+</example>
+
+<example type="invalid">
+  # Bad: Using Raw SQL String with jOOQ
+  ```java
+  // Avoid constructing queries using raw SQL strings
+  String sql = "SELECT * FROM book WHERE price < ? ORDER BY title ASC";
+
+  // ... inside a service method ...
+  // This bypasses much of jOOQ's type safety and refactoring benefits
+  List<BookResponse> cheapBooks = dsl.resultQuery(sql, BigDecimal.TEN)
+      .fetchStream()
+      .map(record -> mapToBookResponse(record.into(BOOK))) // More complex mapping often needed
+      .toList();
+  // Missing Auditing (refer to mdc:rules/java-common/audit-logging.mdc)
+  ```
+</example>
+
+<example>
+  # Good: Basic jOOQ Query Example
+  ```java
+  // ... inside a service method (retry/transaction/audit handled by framework/other rules) ...
+  public Optional<BookResponse> findBookById(UUID id) {
+      // The actual DB call might be wrapped by retry logic elsewhere (see specific retry rules)
+      Optional<BookResponse> book = dsl.selectFrom(BOOK) // Use generated BOOK
+          .where(BOOK.ID.eq(id)) // Use generated ID field
+          .fetchOptional()
+          .map(this::mapToBookResponse); // Mapping logic
+
+      // Auditing is handled separately (see mdc:rules/java-common/audit-logging.mdc)
+      // if (book.isPresent()) { AuditLogger.logBookAccessed(...); }
+
+      return book;
+  }
+  ```
+</example>
+
+<example>
+  # Good: Building a Query with Conditional Predicates
+  ```java
+  // Assuming BOOK is the generated jOOQ table class
+  // Assuming BookResponse is the target DTO
+  // Assuming BookRecord is the jOOQ generated record class
+  import static ee.smit.jooq.Tables.BOOK;
+  import org.jooq.Condition;
+  import org.jooq.impl.DSL;
+  import java.math.BigDecimal;
+  import java.util.List;
+
+  // ... inside a service method ...
+  public List<BookResponse> findBooksByCriteria(String titlePrefix, BigDecimal maxPrice) {
+      // Start with a condition that is always true (acts as a base)
+      Condition condition = DSL.trueCondition();
+
+      // Conditionally add a predicate for title prefix if provided
+      if (titlePrefix != null && !titlePrefix.isBlank()) {
+          condition = condition.and(BOOK.TITLE.like(titlePrefix + "%"));
+      }
+
+      // Conditionally add a predicate for maximum price if provided
+      if (maxPrice != null) {
+          condition = condition.and(BOOK.PRICE.le(maxPrice));
+      }
+
+      // Build and execute the query using the dynamically constructed condition
+      // (Retry/transaction/audit aspects are typically handled by framework/other rules)
+      List<BookResponse> books = dsl.selectFrom(BOOK)
+          .where(condition) // Apply the condition here
+          .orderBy(BOOK.TITLE.asc())
+          .fetchStream()
+          .map(this::mapToBookResponse) // Assumes mapping method exists
+          .toList();
+
+      // Auditing would typically be handled separately according to specific rules
+      // e.g., if (!books.isEmpty()) { AuditLogger.logSearchOperation(...); }
+
+      return books;
+  }
+
+  // --- Helper/Placeholder methods/classes for the example ---
+  private static class BookResponse { /* DTO fields... */ }
+  // BookRecord would be the generated jOOQ record class
+  // private static class BookRecord extends UpdatableRecordImpl<BookRecord> { /* generated */ }
+
+  private BookResponse mapToBookResponse(BookRecord record) {
+    // Placeholder for the actual mapping logic from Record -> DTO
+    return new BookResponse();
+  }
+  // --- End Helper/Placeholders ---
+
+  ```
+</example>
+
+## Critical Rules
+  - ALWAYS use generated jOOQ DSL (tables/fields) with bind values; NEVER build raw SQL strings
+  - ALWAYS map `Record` objects to DTOs/entities via dedicated mapping methods
+  - NEVER manage JDBC connections manually; rely on framework-provided transaction management
+  - PREFER streaming (e.g., `fetchStream`) for large result sets; ensure resources are closed promptly
+  - PREFER composed joins over iterative queries to avoid N+1 patterns
+  - BE EXPLICIT with locking semantics (e.g., `forUpdate`) when necessary and document invariants
+  - VALIDATE and sanitize dynamic conditions; build predicates via type-safe `Condition` composition
+  - USE batch operations where appropriate to reduce round trips (e.g., batch inserts/updates)
+  - SEPARATE auditing concerns from DB logic; follow audit logging conventions (`mdc:rules/java-common/audit-logging.mdc`)
+  - RETURN `Optional` for absent values instead of `null`; avoid null returns

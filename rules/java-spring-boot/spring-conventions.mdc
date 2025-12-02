@@ -1,0 +1,403 @@
+---
+description: Spring Boot and security conventions for controllers, services, and configuration
+globs: **/*.java
+alwaysApply: true
+---
+# Project Spring Boot & Security Conventions
+
+## Context
+
+- Apply when writing or modifying Spring Boot application code, especially configuration, controllers, services, and exception handlers within this project.
+- Ensures adherence to established patterns for security, dependency injection, validation, transaction management, exception handling, and configuration.
+- **Note:** This project uses Gradle for build automation and dependency management.
+- **Note:** Some requirements are Spring Boot 4+ specific (marked accordingly). This project supports both Spring Boot 3.5 and 4.0.
+- For comprehensive security best practices, see `[security.mdc](mdc:rules/common/security.mdc)`.
+- For jOOQ DSL usage, see `mdc:rules/java-common/jooq-database-access.mdc`.
+- For database retry logic, see `mdc:rules/java-spring-boot/spring-retry-conventions.mdc`.
+
+## Requirements
+
+- **Dependency Injection:** Use constructor injection for all Spring-managed dependencies.
+- **Transaction Management:** Annotate service classes with `@Transactional`. Use `@Transactional(readOnly = true)` for read-only service methods that interact with the database (even indirectly).
+- **Input Validation:**
+  - Annotate fields within request DTOs/models with Jakarta Bean Validation annotations (e.g., `@NotNull`, `@Size`, `@Pattern`, `@Email`, `@Valid` for nested objects).
+  - Use the `@Valid` annotation on `@RequestBody` parameters in controller methods to trigger validation.
+- **Security Configuration:** Configure `SecurityFilterChain` beans using the lambda DSL within an `@Configuration` class annotated with `@EnableWebSecurity`.
+- **Stateless Security:** Disable CSRF and use `SessionCreationPolicy.STATELESS` for stateless JWT-based APIs.
+- **Authorization:** Define authorization rules using `authorizeHttpRequests` with specific `requestMatchers`. Use `anyRequest().authenticated()` as a fallback. Ensure non-public Actuator endpoints (beyond `/health`) are appropriately secured (e.g., require authentication or specific roles).
+- **Method-Level Security:** Use `@PreAuthorize` and `@PostAuthorize` for fine-grained method-level access control when needed.
+- **Enable Method Security:** Enable method security via `@EnableMethodSecurity` in a configuration class.
+- **Exception Handling:** Implement centralized exception handling using `@ControllerAdvice`. Include an `@ExceptionHandler` for `MethodArgumentNotValidException` to return 400 Bad Request for validation failures (preferably using RFC 7807 Problem details).
+- **Configuration Properties:** Use `@ConfigurationProperties` for type-safe property binding. Enable validation with `@Validated` and Jakarta Bean Validation annotations.
+- **HTTP Clients:** Prefer `RestClient` (Spring Boot 3.2+) for synchronous clients and `WebClient` for reactive. **Spring Boot 4+:** `RestTemplate` is deprecated; migrate to `RestClient`. **Spring Boot 3.5:** `RestTemplate` is still available but `RestClient` is preferred. Configure proper timeouts, error handling, and connection pooling. Use `@RestClientTest`/`@WebFluxTest` as appropriate.
+- **Caching:** Use Spring Cache abstraction (`@Cacheable`, `@CacheEvict`, `@CachePut`) for expensive operations. Configure cache managers appropriately.
+- **Async Processing:** Use `@Async` for non-blocking operations. Configure custom `TaskExecutor` beans for better thread management.
+- **Event Publishing:** Use `ApplicationEventPublisher` to publish domain events for loose coupling. Handle events with `@EventListener` methods. Consider `@TransactionalEventListener` for events that should only fire after successful transaction commits.
+- **Logging:** Use SLF4J (`org.slf4j.Logger`) for logging within application components.
+- **API Implementation:** Implement OpenAPI generated interfaces in Controllers when applicable.
+- **JWT Converters:** Define custom `JwtAuthenticationConverter` beans when needing specific authority extraction logic (e.g., from scopes).
+- **Controllers:** Keep controllers lean, delegating business logic to services. Use `ResponseEntity` for explicit response control.
+
+## Examples
+
+<example>
+  # Good: Input Validation in DTO and Controller
+  ```java
+  // In your DTO (e.g., {base.package}.openapi.model.Book or your generated/manual DTO)
+  public class Book {
+      // ... other fields
+      @NotNull(message = "Title cannot be null")
+      @Size(min = 1, max = 255, message = "Title must be between 1 and 255 characters")
+      private String title;
+
+      @NotNull(message = "Author cannot be null")
+      @Size(min = 1, max = 100)
+      private String author;
+
+      @Pattern(regexp = "^(978|979)-[0-9]{1,5}-[0-9]{1,7}-[0-9]{1,6}-[0-9]$", message = "Invalid ISBN format")
+      private String isbn;
+      // ... getters/setters
+  }
+
+  // In your Controller (e.g., BookController)
+  @RestController
+  public class BookController implements BooksApi {
+      // ... dependencies & constructor ...
+
+      @Override
+      public ResponseEntity<BookResponse> createBook(@Valid @RequestBody Book book) { // Use @Valid
+          log.info("REST request to create a new book: {}", book.getTitle());
+          // Service call...
+          BookResponse createdBook = bookService.createBook(book);
+          return ResponseEntity.status(HttpStatus.CREATED).body(createdBook);
+      }
+       // ... other methods ...
+  }
+
+  ```
+</example>
+
+<example>
+  # Good: Constructor Injection and @Transactional in Service
+  ```java
+  @Service
+  @Transactional // Apply transactionality at the class level
+  public class MyBusinessService {
+      private final MyRepositoryAccess repository; // Could be a wrapper using jOOQ rule
+      private final AnotherSpringBean anotherBean;
+      private static final Logger log = LoggerFactory.getLogger(MyBusinessService.class);
+
+
+      // Constructor injection
+      public MyBusinessService(MyRepositoryAccess repository, AnotherSpringBean anotherBean) {
+          this.repository = repository;
+          this.anotherBean = anotherBean;
+      }
+
+      @Transactional(readOnly = true) // Override for read-only methods
+      public Optional<BusinessData> getBusinessData(UUID id) {
+          log.info("Fetching business data for id: {}", id);
+          // Assumes repository call adheres to jOOQ/DB rule (incl. retry)
+          Optional<DataObject> dataObject = repository.findById(id);
+          return dataObject.map(this::mapToBusinessData);
+      }
+
+      public BusinessData createBusinessData(InputData input) {
+           log.info("Creating new business data");
+           anotherBean.performAction();
+           // Assumes repository call adheres to jOOQ/DB rule (incl. retry)
+           DataObject created = repository.save(mapToDataObject(input));
+           return mapToBusinessData(created);
+      }
+      // ... mapping methods, etc ...
+  }
+  ```
+
+</example>
+
+<example type="invalid">
+  # Bad: Missing @Valid in Controller
+  ```java
+  @RestController
+  public class BookController implements BooksApi {
+      // ...
+
+      @Override
+      // Missing @Valid - validation annotations on Book DTO won't be triggered
+      public ResponseEntity<BookResponse> createBook(@RequestBody Book book) {
+          log.info("REST request to create a new book: {}", book.getTitle());
+          BookResponse createdBook = bookService.createBook(book);
+          return ResponseEntity.status(HttpStatus.CREATED).body(createdBook);
+      }
+       // ...
+  }
+
+  ```
+</example>
+
+<example>
+  # Good: SecurityFilterChain Bean securing Actuator endpoints
+  ```java
+  @Configuration
+  @EnableWebSecurity
+  public class SecurityConfig {
+      @Bean
+      public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+          http
+              // ... csrf, sessionManagement ...
+              .authorizeHttpRequests(authz -> authz
+                  .requestMatchers("/public/**", "/actuator/health").permitAll() // Allow public health check
+                  .requestMatchers("/actuator/**").hasRole("ADMIN") // Secure other actuator endpoints
+                  .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                  .anyRequest().authenticated() // Default deny
+              )
+              .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+          return http.build();
+      }
+  }
+  ```
+
+</example>
+
+<example>
+  # Good: ControllerAdvice Handling Validation Errors
+  ```java
+  @ControllerAdvice
+  public class GlobalExceptionHandler {
+      private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+      // Handle validation errors specifically
+      @ExceptionHandler(MethodArgumentNotValidException.class)
+      public ResponseEntity<Problem> handleMethodArgumentNotValidException(MethodArgumentNotValidException ex, WebRequest request) {
+          log.warn("Validation error: {}", ex.getMessage());
+          String errorDetails = ex.getBindingResult().getFieldErrors().stream()
+                  .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                  .collect(Collectors.joining(", "));
+
+          Problem problem = new Problem()
+              .type(URI.create("https://example.com/errors/validation-error"))
+              .title("Validation Error")
+              .status(HttpStatus.BAD_REQUEST.value())
+              .detail(errorDetails)
+              .instance(URI.create(request.getDescription(false).replace("uri=", "")));
+
+          return new ResponseEntity<>(problem, HttpStatus.BAD_REQUEST);
+      }
+
+      @ExceptionHandler(ResourceNotFoundException.class)
+      public ResponseEntity<Problem> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
+          // ... (as before) ...
+          Problem problem = new Problem()
+              .type(URI.create("https://example.com/errors/not-found"))
+              .title("Resource Not Found")
+              .status(HttpStatus.NOT_FOUND.value())
+              .detail(ex.getMessage())
+              .instance(URI.create(request.getDescription(false).replace("uri=", "")));
+          return new ResponseEntity<>(problem, HttpStatus.NOT_FOUND);
+      }
+      // Other handlers...
+  }
+
+  ```
+</example>
+
+<example>
+  # Good: Configuration Properties with Validation
+  ```java
+  @ConfigurationProperties(prefix = "app.external")
+  @Validated
+  public class ExternalServiceProperties {
+      @NotBlank
+      @URL
+      private String baseUrl;
+
+      @Min(1000)
+      @Max(30000)
+      private int timeoutMs = 5000;
+
+      @NotBlank
+      private String apiKey;
+
+      // Constructor, getters, setters...
+      public ExternalServiceProperties(String baseUrl, int timeoutMs, String apiKey) {
+          this.baseUrl = baseUrl;
+          this.timeoutMs = timeoutMs;
+          this.apiKey = apiKey;
+      }
+  }
+  ```
+
+</example>
+
+<example>
+  # Good: WebClient Configuration
+  ```java
+  @Configuration
+  public class WebClientConfig {
+
+      @Bean
+      public WebClient externalServiceClient(ExternalServiceProperties properties) {
+          return WebClient.builder()
+              .baseUrl(properties.getBaseUrl())
+              .defaultHeader("X-API-Key", properties.getApiKey())
+              .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024))
+              .build();
+      }
+  }
+
+  ```
+</example>
+
+<example>
+  # Good: RestClient Configuration
+  ```java
+  @Configuration
+  public class RestClientConfig {
+
+      @Bean
+      public RestClient externalServiceRestClient(ExternalServiceProperties properties) {
+          return RestClient.builder()
+              .baseUrl(properties.getBaseUrl())
+              .defaultHeader("X-API-Key", properties.getApiKey())
+              .build();
+      }
+  }
+
+  ```
+</example>
+
+<example>
+  # Good: Caching and Async Processing
+  ```java
+  @Service
+  @Transactional
+  public class BookService {
+      private final BookRepository repository;
+      private static final Logger log = LoggerFactory.getLogger(BookService.class);
+
+      public BookService(BookRepository repository) {
+          this.repository = repository;
+      }
+
+      @Cacheable(value = "books", key = "#isbn")
+      @Transactional(readOnly = true)
+      public Optional<Book> findByIsbn(String isbn) {
+          log.info("Fetching book with ISBN: {}", isbn);
+          return repository.findByIsbn(isbn);
+      }
+
+      @CacheEvict(value = "books", key = "#book.isbn")
+      public Book updateBook(Book book) {
+          log.info("Updating book: {}", book.getTitle());
+          return repository.save(book);
+      }
+
+      @Async
+      public CompletableFuture<Void> processBookAsync(String bookId) {
+          log.info("Processing book asynchronously: {}", bookId);
+          // Long-running operation
+          return CompletableFuture.completedFuture(null);
+      }
+  }
+  ```
+
+</example>
+
+<example>
+  # Good: Method-Level Security
+  ```java
+  @Service
+  @Transactional
+  public class AdminBookService {
+
+      @PreAuthorize("hasRole('ADMIN')")
+      public void deleteAllBooks() {
+          // Only admins can delete all books
+      }
+
+      @PreAuthorize("hasRole('ADMIN') or @bookSecurityService.isOwner(#bookId, authentication.name)")
+      public void updateBook(String bookId, Book book) {
+          // Admins or book owners can update
+      }
+
+      @PostAuthorize("returnObject.isPublic or hasRole('ADMIN')")
+      public Book getBook(String bookId) {
+          // Return book only if public or user is admin
+          return findBook(bookId);
+      }
+  }
+
+  ```
+</example>
+
+<example>
+  # Good: Event Publishing and Listening
+  ```java
+  // Domain Event
+  public class BookCreatedEvent {
+      private final String bookId;
+      private final String title;
+      private final Instant createdAt;
+
+      public BookCreatedEvent(String bookId, String title) {
+          this.bookId = bookId;
+          this.title = title;
+          this.createdAt = Instant.now();
+      }
+      // getters...
+  }
+
+  // Publisher Service
+  @Service
+  @Transactional
+  public class BookService {
+      private final ApplicationEventPublisher eventPublisher;
+      private final BookRepository repository;
+
+      public BookService(ApplicationEventPublisher eventPublisher, BookRepository repository) {
+          this.eventPublisher = eventPublisher;
+          this.repository = repository;
+      }
+
+      public Book createBook(CreateBookRequest request) {
+          Book savedBook = repository.save(new Book(request.getTitle()));
+          eventPublisher.publishEvent(new BookCreatedEvent(savedBook.getId(), savedBook.getTitle()));
+          return savedBook;
+      }
+  }
+
+  // Event Listeners
+  @Component
+  public class BookEventHandler {
+
+      @EventListener
+      public void handleBookCreated(BookCreatedEvent event) {
+          // Immediate processing (same transaction)
+          log.info("Book created: {}", event.getTitle());
+      }
+
+      @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+      public void sendNotification(BookCreatedEvent event) {
+          // Only executes after transaction commits
+          emailService.sendNewBookNotification(event.getTitle());
+      }
+  }
+  ```
+
+</example>
+
+## Critical Rules
+
+- ALWAYS use constructor injection for dependencies.
+- ALWAYS apply `@Transactional` to service classes (and `readOnly=true` where applicable for query methods).
+- ALWAYS use `@Valid` on `@RequestBody` parameters in controllers and validation annotations in DTOs.
+- ALWAYS configure security via `SecurityFilterChain` bean using lambda DSL for stateless APIs, securing non-public Actuator endpoints.
+- ALWAYS use `@ControllerAdvice` for centralized exception handling, including `MethodArgumentNotValidException`.
+- ALWAYS use `@ConfigurationProperties` with `@Validated` for type-safe configuration binding.
+- ALWAYS prefer `RestClient`/`WebClient` and configure proper timeouts and error handling. **Spring Boot 4+:** `RestTemplate` is deprecated; use `RestClient` instead.
+- NEVER use field injection (`@Autowired` on fields).
+- USE `@Cacheable` for expensive read operations; `@CacheEvict` for data modifications.
+- USE `@Async` for non-blocking operations with proper `TaskExecutor` configuration.
+- USE `ApplicationEventPublisher` for domain events and `@EventListener` for handling; prefer `@TransactionalEventListener` for post-commit processing.
+- Ensure security configuration matches stateless JWT approach (CSRF disabled, STATELESS session).
+- Enable method security via `@EnableMethodSecurity` when using `@PreAuthorize`/`@PostAuthorize`.

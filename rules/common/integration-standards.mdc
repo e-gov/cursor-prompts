@@ -1,0 +1,89 @@
+---
+alwaysApply: true
+---
+# Integration Standards
+
+## Context
+
+- Apply when developing REST APIs, message queues, or cross-system integrations
+- Ensures consistent patterns across different integration types
+- Focuses on automatically verifiable pattern validation
+
+## Requirements
+
+### API Design Patterns
+
+- Use resource-based URLs: `/X` for collections, `/X/{id}` for specific resources
+- Use kebab-case for multi-word resources: `/boat-engines`
+- Use standard HTTP methods: GET (read), POST (create), PUT (replace), PATCH (partial update), DELETE (remove); use HEAD/OPTIONS where applicable
+- Include API version in URL path: `/v1/persons`
+- Return appropriate HTTP status codes: 200, 201, 202, 204, 400, 401, 403, 404, 409, 422, 429, 500, 503
+- Use RFC 7807 Problem Details for errors (type, title, status, detail, instance); include application error code and traceId/correlationId
+- Use query parameters for filtering: `GET /persons?name=John&age=25`
+- Implement pagination for large result sets: `?limit=25&offset=50`
+- Document APIs using OpenAPI specification (mandatory)
+- Follow Contract-First approach (define OpenAPI spec before implementation)
+- Include JSON schema definitions for all data structures
+
+### Message Queue Patterns
+
+- Use channel naming convention: `[data_owner].[message_data]`
+- Add type suffixes: Request/Response, Topic, Queue
+- Use JSON format for all messages unless binary data required
+- Validate JSON messages using json-schema validator
+- Include correlation-id for request-response patterns
+- Encode binary files as Base64 in JSON messages
+
+### Security & Error Handling
+
+- Use HTTPS protocol for all cross-system communication
+- Use OAuth 2.1/OpenID Connect with Bearer tokens in the `Authorization` header; NEVER include tokens in URLs or query parameters
+- Validate SSL certificates for secure connections
+- Include correlation IDs in all integration requests and propagate W3C Trace Context headers (`traceparent`, `tracestate`)
+- Return RFC 7807 Problem Details for error responses
+
+## Examples
+
+<example>
+✅ Valid API URL structure:
+GET /v1/persons/123/applications?status=active&limit=10
+
+✅ Valid message queue channel:
+amr.ametijuhendRequest
+
+✅ Valid error response:
+{
+  "status": "401",
+  "message": "Authentication Required",
+  "code": 20003
+}
+
+✅ Valid JWT header:
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+</example>
+
+<example type="invalid">
+❌ Invalid API URL:
+GET /getPersons/create
+
+❌ Invalid message channel:
+ametijuhend_queue
+
+❌ Invalid error response:
+"Error occurred"
+
+❌ Missing JWT header:
+GET /api/data
+</example>
+
+## Critical Rules
+
+- Always use resource-based URLs with proper HTTP methods
+- Never use verbs in API URLs (/getPersons, /createPerson)
+- Always include correlation IDs for request-response messages
+- Always validate JSON messages against schemas
+- Always use HTTPS for cross-system communication
+- Always use OAuth 2.1/OIDC Bearer tokens in the `Authorization` header; never include tokens in query strings
+- Always document APIs with OpenAPI specification
+- Always follow Contract-First approach for API development
+- Never expose internal system details in error messages

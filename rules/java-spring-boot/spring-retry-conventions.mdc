@@ -1,0 +1,104 @@
+---
+description: Spring Boot database retry conventions using AbstractDatabaseService and RetryTemplate
+globs: **/*.java
+alwaysApply: false
+---
+# Database Retry Conventions
+
+## Context
+- Apply when implementing database operations in service classes (`src/main/java/**/service/**/*.java`) that need resilience against transient database failures (e.g., connection issues, temporary unavailability, deadlocks).
+- Applies specifically to services interacting with the database via jOOQ within this application.
+- This pattern relies on the `RetryConfig`, `AbstractDatabaseService`, and `DatabaseRetryProperties` components configured in the project.
+- **Note:** `{base.package}` represents your project's base package (e.g., `com.example.myapp`). Projects must implement the referenced classes (`AbstractDatabaseService`, `DatabaseRetryException`, etc.).
+
+## Requirements
+1.  **Extend Base Class:** Service classes performing database operations that should be retried MUST extend `{base.package}.service.common.AbstractDatabaseService`.
+2.  **Constructor Injection:** Services extending `AbstractDatabaseService` MUST receive `DSLContext` and `RetryTemplate` via constructor injection and pass them to the `super(dsl, retryTemplate)` constructor.
+3.  **Use `executeWithRetry`:** ALL individual database operations (e.g., `select`, `fetch`, `store`, `delete`, `execute`) within these services MUST be wrapped in the `executeWithRetry(String operationName, DatabaseOperation<T> operation)` method provided by the base class. The lambda passed to this method should contain the actual jOOQ database interaction code.
+4.  **Provide Operation Name:** A meaningful, unique `operationName` string (typically matching the service method name or the specific action) MUST be provided as the first argument to `executeWithRetry` for clear logging and error reporting.
+5.  **Use Logging Helpers (Optional):** The base class provides `logOperationStart(String operation, String details)` and `logOperationSuccess(String operation, String details)` helpers. These can be used for *additional* debug-level logging outside the `executeWithRetry` lambda if needed, but `executeWithRetry` already handles INFO-level start/success logging and ERROR-level failure logging.
+6.  **Exception Handling:**
+    *   Understand that `executeWithRetry` will handle configured retryable exceptions (e.g., `SQLException`, `DataAccessException`, `SQLRecoverableException` based on `RetryConfig`).
+    *   If all retries are exhausted, `executeWithRetry` wraps the last thrown exception in a `{base.package}.exception.DatabaseRetryException`.
+    *   Service methods should generally allow `DatabaseRetryException` (and other non-retryable exceptions thrown within the lambda) to propagate upwards to be handled by the `GlobalExceptionHandler`.
+7.  **Configuration:** Do not hardcode retry attempts or backoff periods. Rely on the centrally configured `RetryTemplate` which uses settings from `DatabaseRetryProperties` (defined in `application.yml`).
+
+## Examples
+
+<example>
+# Good: Extending AbstractDatabaseService and using executeWithRetry
+```java
+@Service
+public class BookService extends AbstractDatabaseService {
+
+    // Constructor injection required
+    public BookService(DSLContext dsl, RetryTemplate retryTemplate, AuditLogger auditLogger) {
+        super(dsl, retryTemplate); // Pass dsl and retryTemplate to super
+        // ... other dependencies
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<BookResponse> findBookById(UUID id) {
+        // Optional: Additional debug logging before retry block
+        logOperationStart("findBookById", "Finding book with ID: " + id);
+        
+        // Wrap DB operation in executeWithRetry
+        Optional<BookResponse> book = executeWithRetry("findBookById", () -> 
+            dsl.selectFrom(BOOK) // Actual DB interaction inside lambda
+                .where(BOOK.ID.eq(id))
+                .fetchOptional()
+                .map(this::mapToBookResponse)
+        );
+        
+        // Optional: Additional debug logging after retry block
+        if (book.isPresent()) {
+            logOperationSuccess("findBookById", "Found book ID: " + id);
+        } else {
+            logOperationSuccess("findBookById", "Book not found ID: " + id);
+        }
+        
+        return book;
+    }
+}
+```
+*Explanation:* Service extends `AbstractDatabaseService`, uses constructor injection, and wraps the jOOQ `select/fetch` operation within `executeWithRetry`, providing an operation name.
+</example>
+
+<example type="invalid">
+# Bad: Not using executeWithRetry
+```java
+@Service
+// Missing extends AbstractDatabaseService
+public class BadBookService {
+
+    private final DSLContext dsl;
+    // Missing RetryTemplate injection
+
+    public BadBookService(DSLContext dsl) {
+        this.dsl = dsl;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<BookResponse> findBookById(UUID id) {
+        // ERROR: Direct DSL usage without retry wrapper
+        Optional<BookRecord> recordOpt = dsl.selectFrom(BOOK)
+                .where(BOOK.ID.eq(id))
+                .fetchOptional();
+        
+        // This operation will not retry on transient DB errors.
+        return recordOpt.map(this::mapToBookResponse); 
+    }
+    
+    // Helper method assumed
+    private BookResponse mapToBookResponse(BookRecord record) { return null; }
+}
+```
+*Explanation:* Service does not extend `AbstractDatabaseService` and directly uses `DSLContext` without wrapping the database call in `executeWithRetry`. Transient database errors during the `fetchOptional` call will not be retried.
+</example>
+
+## Critical Rules
+- **ALWAYS** extend `AbstractDatabaseService` for service classes performing database operations that require retry capability.
+- **ALWAYS** wrap individual database interactions (select, fetch, store, delete, execute, etc.) within the `executeWithRetry` method.
+- **ALWAYS** provide a meaningful `operationName` to `executeWithRetry`.
+- **NEVER** perform raw database operations directly using the injected `DSLContext` instance within services extending `AbstractDatabaseService`; use the `executeWithRetry` wrapper.
+- **ENSURE** `DSLContext` and `RetryTemplate` are injected via the constructor and passed to `super()`.

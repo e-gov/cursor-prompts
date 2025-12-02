@@ -1,0 +1,161 @@
+---
+description: Java application logging standards using SLF4J and Logstash JSON encoding
+globs: **/*.java
+alwaysApply: true
+---
+
+# Java Application Logging Standards (JSON/Logstash Format)
+
+## Context
+
+- Apply this rule when implementing logging (Session, Activity, Debug, Error) in Java applications using the SLF4j API and configured with Logback and `net.logstash.logback.encoder.LogstashEncoder`.
+- This rule complements, but does not replace, `mdc:rules/java-common/audit-logging.mdc`, which covers specific security audit events. General principles here (like forbidden data) apply unless overridden by the audit rule.
+- For comprehensive security best practices, see `[security.mdc](mdc:rules/common/security.mdc)`.
+- The goal is consistent, informative, and secure application-level logging in a structured JSON format suitable for log aggregation systems (like ELK stack).
+
+## Requirements
+
+1. **Logging Facade:** Use the SLF4j API for all logging statements.
+2. **Encoding:** Logback configuration ensures UTF-8 (default for LogstashEncoder).
+3. **Language:** Use English for log messages and field names where possible. The log message itself goes into the `message` field in the JSON output.
+4. **User Input Handling:**
+    - Encode non-printable characters and line separators in user-provided data *if* they are included directly in log messages. LogstashEncoder generally handles JSON encoding for standard fields.
+    - Be mindful of log injection if constructing message strings dynamically with user input. Use parameterized logging (`log.info("User {} action", userInput)`).
+5. **Correlation ID:** Implement and consistently use a unique correlation ID via MDC's `requestId` key. This MUST be populated for all logs within a request scope, typically set up in a web filter or interceptor.
+6. **Log Levels, Categories & Locations:**
+    - **Request Boundaries (Filter/Interceptor Recommended):**
+        - Log request start at `INFO` level, including `requestId`, `clientIp`, HTTP method, path.
+        - Log request completion at `INFO` level, including `requestId`, status code, duration.
+    - **Controllers:**
+        - Log validation errors at `WARN` level.
+        - *(Optional)* Log entry to complex controller methods at `DEBUG` level.
+        - Log unhandled exceptions caught by `@ControllerAdvice` at `ERROR` level.
+    - **Services:**
+        - Log `INFO` (Activity Log) for significant business events (e.g., object creation/update, state transitions) and interactions with external systems. Include relevant context (e.g., `objectId`, `eventType` via MDC).
+        - Log `INFO` (Session Log) for authentication/authorization events (logins, logouts, permission changes - *excluding* forbidden data).
+        - Log `WARN` for handled business exceptions or known error conditions.
+        - Log `ERROR` for unexpected exceptions during service execution.
+        - Use `DEBUG` judiciously for detailed internal logic flow tracing in complex methods.
+    - **Other Components:** Limit logging in repositories/DAOs primarily to `ERROR` for specific data access failures. Use framework-level SQL logging if needed.
+7. **Contextual Fields (via MDC):** Populate MDC for relevant context. The configured LogstashEncoder automatically includes standard fields. Ensure the following are consistently populated at the appropriate layers:
+    - `requestId`: (Mandatory) Unique ID for the request/transaction. Typically set in a filter/interceptor.
+    - `sessionId`: Session identifier, if available. Set in filter/interceptor.
+    - `userId`: Identifier of the acting user (WHO). Set in filter/interceptor after authentication.
+    - `clientIp`: Source IP address of the request (WHENCE). Set in filter/interceptor.
+    - `applicationName`: Identifier for the application/service (WHERE). Set globally or via MDC.
+    - *(Recommended)* Consider adding these fields via MDC within services/controllers for richer context where relevant:
+        - `eventType`: Standardized identifier for the business event (e.g., `USER_LOGIN`, `ORDER_CREATED`).
+        - `objectId`: Identifier of the primary business object involved.
+        - `eventResult`: Outcome of a specific operation (`SUCCESS`, `FAILURE`, `VALIDATION_ERROR`).
+        - `traceId` / `spanId`: Distributed tracing identifiers when OpenTelemetry is enabled (helps correlate logs with traces).
+        - Note: If using OpenTelemetry, prefer automatic MDC population via OTel instrumentation or a Logback OTel appender; otherwise, set these via a web filter/interceptor so they are included in logs.
+8. **Standard JSON Fields:** Be aware that LogstashEncoder automatically adds fields like:
+    - `@timestamp`: Event timestamp (WHEN). ISO 8601 format.
+    - `@version`: Logstash schema version (usually 1).
+    - `message`: The formatted log message string.
+    - `logger_name`: The name of the SLF4j logger.
+    - `thread_name`: Name of the logging thread.
+    - `level`: Log level (e.g., "INFO").
+    - `level_value`: Numeric log level.
+    - `stack_trace`: Included for logs with exceptions at ERROR level.
+9. **Forbidden Data:** Strictly avoid logging data listed in the "Forbidden Data" section below, whether in the `message` field or any custom MDC fields.
+10. **Log Format:** The format is JSON, generated by `net.logstash.logback.encoder.LogstashEncoder` based on the Logback configuration (`logback-spring.xml`). No specific `PatternLayout` is needed for the main application logs.
+11. **Documentation:** Document service-specific log events, important custom MDC fields used, and any deviations from this standard.
+12. **Background Process Logging:** Log all background process activities (scheduled jobs, batch processing, data synchronization) using appropriate log levels (INFO for normal operation, WARN for issues, ERROR for failures).
+13. **Success/Failure Logging:** Log both successful and failed operations using appropriate log levels (INFO for success, WARN for handled errors, ERROR for unexpected failures).
+
+## Examples
+
+<example>
+```java
+// GOOD: Using MDC for context with LogstashEncoder configuration
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+
+// ...
+
+Logger log = LoggerFactory.getLogger(MyService.class);
+
+public void processOrder(String orderId, String userId, String clientIp, String requestId, String sessionId) {
+    // Assume requestId, sessionId, userId, clientIp are already in MDC (e.g., from a web filter)
+    // as these are configured to be included by LogstashEncoder.
+    // We might add optional, context-specific MDC data if needed:
+    MDC.put("objectId", orderId);
+    MDC.put("operation", "processOrder");
+
+    log.info("Starting processing for order {}", orderId); // Message field in JSON
+
+    try {
+        // ... processing logic ...
+        MDC.put("eventResult", "SUCCESS"); // Optional custom field for outcome
+        log.info("Successfully processed order {}", orderId);
+    } catch (Exception e) {
+        MDC.put("eventResult", "FAILURE"); // Optional custom field for outcome
+        log.error("Failed to process order {}", orderId, e); // Exception gets added to stack_trace field
+    } finally {
+        // Clear only the MDC fields added in this method
+        MDC.remove("objectId");
+        MDC.remove("operation");
+        MDC.remove("eventResult");
+        // Do NOT clear requestId, userId etc. here - manage them in the filter/interceptor
+    }
+}
+
+```
+*Explanation:* Uses SLF4j. Relies on filter/interceptor to set standard MDC keys (`requestId`, `userId`, `clientIp`, `sessionId`). Adds optional business-specific MDC keys (`objectId`, `operation`, `eventResult`). Logs messages at INFO/ERROR levels. LogstashEncoder will automatically create JSON including `@timestamp`, `message`, `level`, `logger_name`, configured MDC keys, and `stack_trace` for the error.*
+</example>
+
+<example type="invalid">
+```java
+// BAD: Logging forbidden data (password) and not using MDC effectively
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC; // Assume MDC is generally available but not used correctly
+
+
+// ...
+
+Logger log = LoggerFactory.getLogger(AuthService.class);
+
+public boolean login(String username, String password) {
+    // BAD: Missing MDC setup or usage for standard fields like requestId, clientIp
+    // Even if filter sets them, this log context is poor.
+
+    // VERY BAD: Manually formatting sensitive data into message
+    log.info("Attempting login for user: " + username + " with password: " + password);
+
+    if ("admin".equals(username) && "password123".equals(password)) { // Logic
+        // BAD: No indication of result via MDC
+        log.info("Login successful for user: " + username);
+        return true;
+    } else {
+        // BAD: No indication of result via MDC
+        log.warn("Login failed for user: " + username);
+        return false;
+    }
+}
+```
+
+*Explanation:* Critically logs a password in the message field (forbidden data). Fails to leverage standard MDC fields expected by the LogstashEncoder setup (like `requestId`, `clientIp`). Doesn't add any custom MDC fields to indicate the event type or result, making the resulting JSON log less useful.*
+</example>
+
+## Critical Rules
+
+- **NEVER** log forbidden data (passwords, secrets, private keys, session tokens, PII prohibited by law, full DB responses) in the `message` or any MDC field.
+- **ALWAYS** ensure a unique ID is available via MDC key `requestId` for logs within the same request/transaction.
+- **POPULATE** standard MDC keys (`userId`, `clientIp`, `sessionId`, `applicationName`) where applicable, usually via filters/interceptors.
+- **CONSIDER** adding custom MDC fields (e.g., `eventType`, `objectId`, `eventResult`) for specific business context when needed.
+- **USE** the correct SLF4j log levels (`debug`, `info`, `warn`, `error`).
+- **PREFER** parameterized logging (`log.info("User {} action", var)`) over string concatenation, especially with user input.
+
+## Forbidden Data
+
+**Under NO circumstances should the following data be logged:**
+
+1. User authentication secrets (passwords, plaintext or hashed).
+2. Private keys.
+3. Session key values (session tokens, cookies). Log only irreversible derivatives like hashes if needed for correlation (e.g., using `sessionId` MDC key is acceptable if it's a hashed or opaque value).
+4. Full textual responses from database queries. Log only the fact of data return or the response size.
+5. Biometric data in a replayable format.
+6. Any data prohibited by law or regulation (e.g., full credit card numbers).

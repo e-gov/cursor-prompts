@@ -1,0 +1,160 @@
+---
+description: Java audit logging conventions using a dedicated AuditLogger utility
+globs: **/*.java
+alwaysApply: true
+---
+# Audit Logging Conventions
+
+## Context
+
+- Apply when implementing significant business operations within service classes (`src/main/java/**/service/**/*.java`) that require an audit trail.
+- This application uses a dedicated `AuditLogger` utility to ensure consistent, structured logging of important events for security and compliance.
+- Audit logs are separate from regular application/debug logs.
+- For comprehensive security best practices, see `[security.mdc](mdc:rules/common/security.mdc)`.
+
+## Standard Log Structure
+
+Using the `AuditLogger` utility ensures logs are generated in the following standard JSON format. Developers do **not** construct this JSON manually.
+
+```json
+{
+  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
+  "time": "2023-04-04T12:34:56.123456Z",
+  "application": {
+    "name": "bookstore-service",
+    "extraInfo": {
+      "environment": "dev"
+    }
+  },
+  "activity": {
+    "action": "BOOK_UPDATED", // Example action
+    "extraInfo": { // Action-specific details
+      "id": "123e4567-e89b-12d3-a456-426614174000",
+      "oldTitle": "The Old Title",
+      "newTitle": "The New Title"
+      // ... other relevant fields ...
+    }
+  },
+  "actor": {
+    "name": "system" // Or user identifier
+  },
+  "client": {
+    "id": "bookstore-app",
+    "source": "INTERNAL"
+  },
+  "result": {
+    "code": "SUCCESS",
+    "message": "Operation completed successfully"
+  }
+}
+```
+
+## Requirements
+
+- **Use `AuditLogger`:** ALL audit log entries MUST be generated using the static methods provided by the `AuditLogger` utility class.
+- **Log Significant Business Events:** Only log high-level, meaningful business operations (e.g., resource creation, update, deletion, key access), not low-level implementation details.
+- **Log After Success:** Audit log entries for successful operations MUST be created *after* the core business logic (e.g., database commit) has completed successfully within the same transaction context.
+- **Do Not Log Sensitive Data:** Avoid including sensitive personal information (e.g., passwords, detailed financial data, PII unless strictly necessary and compliant with regulations) in audit log messages or `extraInfo` fields. Redact or omit if necessary.
+- **Use Correct Methods:** Use the appropriate `AuditLogger` method for the event type.
+- **Log All Authentication Attempts:** ALL authentication attempts MUST be logged regardless of outcome (login, logout, failed authentication, session timeout).
+- **Log All User-Initiated Activities:** ALL user-initiated activities MUST be logged (CRUD operations, searches, file uploads, exports).
+
+## Key `AuditLogger` Methods (Examples)
+
+The `AuditLogger` provides specific methods for common events, such as:
+
+```java
+// Book operations
+AuditLogger.logBookCreated(bookId, title, author, isbn);
+AuditLogger.logBookUpdated(bookId, oldTitle, newTitle, oldAuthor, newAuthor);
+AuditLogger.logBookDeleted(bookId, title, isbn);
+AuditLogger.logBookAccessed(bookId, title, accessMethod);
+
+// Generic / Batch operations
+AuditLogger.logBatchOperation(batchType, count, description);
+
+// Authentication / Authorization events (Conceptual)
+// AuditLogger.logLoginSuccess(userId);
+// AuditLogger.logPermissionChange(userId, permission, granted);
+```
+
+*(Consult the `AuditLogger` class for the definitive list and parameters.)*
+
+## Examples
+
+<example>
+ # Good: Logging book creation after successful DB store
+ ```java
+ @Service
+ public class BookService {
+     // ... dependencies ...
+
+     @Transactional
+     public BookResponse createBook(Book bookRequest) {
+         UUID newId = UUID.randomUUID();
+         BookRecord bookRecord = dsl.newRecord(BOOK);
+         // ... map request to record ...
+         bookRecord.store(); // DB operation completes successfully
+
+         // Log the audit event AFTER the operation succeeded
+         AuditLogger.logBookCreated(newId, bookRequest.getTitle(),
+                                    bookRequest.getAuthor(), bookRequest.getIsbn());
+
+         return mapToBookResponse(bookRecord);
+     }
+ }
+
+ ```
+</example>
+
+<example type="invalid">
+ # Bad: Manual logging or incorrect timing
+ ```java
+ @Service
+ public class BookService {
+     // ... dependencies ...
+     private static final Logger log = LoggerFactory.getLogger(BookService.class);
+
+     @Transactional
+     public BookResponse createBook(Book bookRequest) {
+         UUID newId = UUID.randomUUID();
+         BookRecord bookRecord = dsl.newRecord(BOOK);
+         // ... map request ...
+
+         // ERROR: Logging before the operation is confirmed successful
+         AuditLogger.logBookCreated(newId, bookRequest.getTitle(), /*...*/);
+
+         bookRecord.store(); // Operation might fail after logging!
+
+         // ERROR: Using standard logger for audit trail
+         log.info("AUDIT: Book created with id {}", newId); // Incorrect format/destination
+
+         return mapToBookResponse(bookRecord);
+     }
+ }
+ ```
+
+</example>
+
+<example type="invalid">
+ # Bad: Logging sensitive data
+ ```java
+ // Hypothetical Payment Service
+ public void processPayment(PaymentRequest request) {
+    // ... process payment ...
+    boolean success = paymentProvider.charge(request.getCreditCardNumber(), request.getAmount());
+    if(success) {
+      // ERROR: Logging full credit card number
+      AuditLogger.logPaymentProcessed(request.getUserId(), request.getAmount(), request.getCreditCardNumber());
+    }
+ }
+ ```
+</example>
+
+## Critical Rules
+
+- ALWAYS use the `AuditLogger` utility for creating audit log entries.
+- NEVER create audit logs manually or use standard application loggers (`slf4j`, `log4j2`, etc.) for audit purposes.
+- ALWAYS log *after* the core operation has successfully completed.
+- NEVER log sensitive personal data unless explicitly required and handled according to security policies.
+- DO NOT log low-level technical details or exceptions in the audit log; use standard application logging for those.

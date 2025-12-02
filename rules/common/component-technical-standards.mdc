@@ -1,0 +1,130 @@
+---
+alwaysApply: true
+---
+
+
+# Component Technical Standards
+
+## Context and Purpose
+
+**Target Audience**: Software developers, AI coding assistants, automated code review tools
+**Scope**: Enterprise software component development for SMIT platform
+**Purpose**: Automatically enforceable technical standards and implementation patterns
+
+These standards are designed to be validated automatically during development by AI assistants and code analysis tools. They focus on component architecture patterns, integration approaches, technical implementation details, and best practices that can be mechanically verified.
+
+**Complementary Documents**: See `rules/common/security.mdc` and `rules/common/integration-standards.mdc`.
+
+## Requirements
+
+### Component Architecture
+
+### Code Quality & Standards
+
+- Source code must be UTF-8 formatted
+- Move textual values to translation files (i18n)
+- NEVER use deprecated methods
+- Code and comments must be in English; business variables in Estonian if no logical equivalent exists
+- Build artifacts must be deployable to different environments without rebuilding
+- Logic components should follow a layered architecture (e.g., MVC or hexagonal) with clear separation of concerns
+- Mark audit log entries clearly to distinguish them in log searches
+- Remove unused/dead code and commented-out blocks; rely on version control history instead of commented code
+- Declare all dependencies via manifest files and lock versions for reproducible builds
+
+### Database & Data Management
+
+- Create migration scripts for data object changes - run during deployment, not on every restart
+- NEVER write business logic in database (procedures, triggers) without explicit justification in architecture documentation
+- Use full-text indexes (Lucene or database internal) for text searches only
+- Access databases only through application-specific system users, NEVER through superuser accounts (SYS, POSTGRES)
+- Use registry codes with country prefix (ISO 3166-1 Alpha-2, uppercase) for object identification
+- Each component must own its database; different components MUST NOT share the same database
+- Databases MUST NOT be used as an integration mechanism between components
+
+### API & Integration Standards
+*See `rules/common/integration-standards.mdc` for definitive, enforceable integration rules*
+
+### State & Storage Management
+
+- Components must be stateless - store persistent data in database or external storage
+- NEVER assume filesystem availability for persistent data
+- Package all required libraries with component - NEVER depend on OS libraries
+
+### Performance & Scalability
+
+- Long operations must run as background processes with saved state - works across multiple instances
+- Component must shut down gracefully, returning unfinished work to queue
+- Component processes must handle unexpected shutdown by returning work to queue
+- Do not add startup tasks that can take longer than 60 seconds; run them as separate admin processes or deferred background jobs. Application startup should complete within 60 seconds.
+
+- Internal communication should use asynchronous methods when possible to avoid blocking threads
+
+### Monitoring & Observability
+*See language/framework-specific logging and monitoring rules for enforceable details*
+
+### Frontend-Backend Separation
+
+- UI components must be completely separate from logic components
+- UI and logic communicate ONLY via HTTP/WEBSOCKET protocols
+- UI exchanges only data with backend, NEVER visual content (HTML/JS)
+
+### Testing Standards
+
+- Logic components MUST have integration tests for web services/message queues
+- Include unit tests for specific business logic validation
+- Use headless browsers for UI automation testing when needed
+
+### Error Handling & Resilience
+*See framework-specific retry/circuit breaker rules for enforceable details*
+
+### Data Standards & Security
+
+### Configuration & Deployment
+
+- Use environment variables or platform config (configmap, secrets) - NEVER external config files
+- Components must export services via port binding; do not depend on external runtime servers (Apache, Nginx)
+- Administrative tasks (database migrations, one-off scripts) must run as separate processes, not during normal application startup or on every restart
+
+## Examples
+
+<example>
+✅ Good: Port binding: `server.listen(process.env.PORT || 3000)`
+✅ Good: Graceful shutdown: `process.on('SIGTERM', () => gracefulShutdown())`
+✅ Good: Using environment variables: `DATABASE_URL=postgres://...`
+✅ Good: Implementing health check endpoint: `GET /health`
+✅ Good: JSON logging with correlation ID
+✅ Good: Frontend calls API: `fetch('/api/users')` returning JSON data only
+✅ Good: Database retry: `@Retryable(value = SQLException.class, maxAttempts = 3)`
+✅ Good: Registry code: `EE39001011234` (Estonia + gender + birthdate + ID)
+✅ Good: MVC structure: Controller → Service → Repository layers
+✅ Good: Audit log: `{"type": "AUDIT", "action": "user_login", "user": "12345"}`
+✅ Good: Kubernetes config: `envFrom: configMapRef: name: app-config`
+✅ Good: Database retry with @Retryable annotation for connection problems
+</example>
+
+<example type="invalid">
+❌ Invalid: Hard-coded ports: `server.listen(3000)`
+❌ Invalid: No graceful shutdown handling: ignoring SIGTERM
+❌ Invalid: Storing JWT tokens in localStorage
+❌ Invalid: Using external config.properties file
+❌ Invalid: Logging only error message without stack trace
+❌ Invalid: Backend returning HTML content to frontend
+❌ Invalid: External config file: `Properties.load("config.properties")`
+</example>
+
+## Critical Rules
+
+- NEVER hard-code port numbers in application code
+- NEVER ignore graceful shutdown signals (SIGTERM)
+- NEVER store sensitive data in URLs
+- NEVER use deprecated methods or APIs
+- NEVER return HTML/JS content from backend to frontend
+- NEVER store JWTs in browser storage
+- ALWAYS implement health check endpoints
+- ALWAYS log complete stack traces for exceptions
+- ALWAYS use stateless design patterns
+- ALWAYS implement retry logic for database operations
+- ALWAYS separate UI components from logic components
+- ALWAYS use layered architecture (e.g., MVC or hexagonal) for logic components
+- ALWAYS mark audit log entries for searchability
+- ALWAYS implement graceful shutdown procedures (SIGTERM handling)

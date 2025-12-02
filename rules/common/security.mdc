@@ -1,0 +1,271 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Comprehensive Security Best Practices
+
+## Context
+
+- Apply when writing or reviewing any code that handles data, authentication, authorization, or external interactions
+- These rules cover both general, language-agnostic principles and specific requirements for web applications/servers
+- Based on industry standards including OWASP ASVS and security best practices
+
+## Requirements
+
+### Input Validation and Output Handling
+
+- **Input Validation:**
+  - Sanitize and validate all external input (user input, API requests, file uploads, environment variables) to prevent injection attacks (SQLi, XSS, XXE, command injection)
+  - Use allow-lists for validation rather than block-lists where possible
+  - Data selection/database queries must use parameterized queries, ORMs, or equivalent protections
+  - Protect against OS command injection using parameterized queries or contextual command line output encoding
+  - All untrusted HTML input from WYSIWYG editors must be sanitized using a secure library
+  - Avoid eval() or dynamic code execution; if unavoidable, sanitize user input before execution
+  - Input must be decoded/unescaped into canonical form only once before processing
+- **Output Encoding:**
+  - Encode output appropriately for its context (HTML, JavaScript, SQL, logs) to prevent XSS and other injection issues
+  - Use proper `Content-Type` header field that matches the actual content
+  - Output encoding must be performed as a final step before interpreter use
+
+### Authentication and Password Management
+
+- **Password Requirements:**
+  - User-set passwords must be at least 8 characters (15+ recommended), up to 64 characters permitted
+  - Check passwords against known-breached password lists using a k-anonymity API (e.g., HIBP) or equivalent service; do not rely on fixed-size “top-N” lists
+  - Allow passwords of any composition; no forced complexity requirements
+  - Password input fields must use type=password; allow paste functionality and password managers
+  - Verify passwords exactly as received (no truncation or case transformation)
+- **Authentication Mechanisms:**
+  - Use strong, standard authentication mechanisms with multi-factor authentication
+  - Implement rate limiting and anti-automation controls against credential stuffing and brute force
+  - Default accounts (root, admin, sa) must be disabled or removed
+  - System-generated passwords must be securely random and expire after short use
+  - No password hints or knowledge-based authentication ("secret questions")
+  - Users must be able to change passwords with current password verification
+
+### OAuth 2.1 / OpenID Connect and Token Management
+
+- **OAuth Flow Security:**
+  - FORBID Implicit Grant and Resource Owner Password Credentials flows
+  - ALWAYS use Authorization Code flow with PKCE (Proof Key for Code Exchange)
+  - Authorization codes must be single-use and short-lived (max 10 minutes)
+  - Validate redirect URIs against client-specific allowlist using exact string comparison
+- **Standards:**
+  - Follow OAuth 2.1 and OpenID Connect best practices for all authentication and authorization integrations
+- **Token Handling:**
+  - Self-contained tokens must be validated using digital signature or MAC
+  - Only allowlisted algorithms for token creation/verification; 'None' algorithm forbidden
+  - Validate token validity time spans (JWT 'nbf', 'exp') and audience restrictions
+  - Use refresh token rotation for public clients; tokens must have absolute expiration
+  - Store sensitive tokens server-side with HttpOnly, Secure session cookies, not browser storage
+
+### Session Management
+
+- **Session Security:**
+  - Session tokens must be dynamically generated with CSPRNG and at least 128 bits entropy
+  - Generate new session token on authentication/re-authentication; terminate current session
+  - Invalidate sessions server-side on logout, expiration, or account deletion
+  - Enforce inactivity timeout and absolute maximum session lifetime per risk analysis
+  - Require re-authentication before modifying sensitive account attributes
+- **Session Controls:**
+  - Users must be able to view and terminate active sessions after re-authentication
+  - Provide option to terminate all other sessions after authentication factor changes
+  - Admins must be able to terminate any user sessions
+
+### CSRF Protection
+
+- For cookie-based sessions, require CSRF protection on all state-changing requests (e.g., synchronizer token or double-submit cookie patterns)
+- Use SameSite cookies as defense-in-depth only; do not rely on SameSite alone for CSRF protection
+
+### Authorization and Access Control
+
+- **Access Control:**
+  - Apply principle of least privilege for all authorization decisions
+  - Verify user authorization for every request accessing private data (prevent IDOR/BOLA)
+  - Enforce authorization at trusted service layer, not client-side code
+  - Implement function-level and data-specific access restrictions
+  - Multi-tenant applications must prevent unauthorized cross-tenant operations
+- **API Security:**
+  - Application must only return data the user has permission to access
+  - Prevent overbroad API responses that expose unauthorized data
+
+### Secrets Management
+
+- **Storage and Handling:**
+  - Use secure secrets management solution (Vault, AWS Secrets Manager, environment variables with proper access control)
+  - NEVER hardcode credentials or sensitive keys in source code
+  - Secrets must be configured to expire and rotate per documentation
+  - Use least privilege access to secrets management systems
+
+### Web Application Security Headers
+
+- **Required Headers:**
+  - Implement strong `Content-Security-Policy` with object-src 'none', base-uri 'none'; disallow 'unsafe-inline' for scripts and use nonces or hashes for any required inline scripts
+  - Use `Strict-Transport-Security` with min 1 year max-age and includeSubDomains
+  - Include `X-Content-Type-Options: nosniff` on all responses
+  - Use `Content-Security-Policy: frame-ancestors` to prevent clickjacking
+  - Set `Referrer-Policy: strict-origin-when-cross-origin`
+  - Set `Permissions-Policy` to explicitly disable unneeded powerful browser features
+- **Cookie Security:**
+  - Cookies must have `Secure` attribute; use `__Host-` or `__Secure-` prefixes
+  - Authorization cookies must have `HttpOnly` attribute
+  - Set appropriate `SameSite` attribute to limit CSRF attacks
+- **CORS Configuration:**
+  - Access-Control-Allow-Origin must be fixed value or validated against allowlist
+  - CORS-safelisted requests to sensitive functionality must verify origin
+  - Use appropriate HTTP methods (POST, PUT, PATCH, DELETE) for sensitive operations
+  - Never use wildcard origins when credentials are involved; only allowlist exact origins
+
+### Cryptography
+
+- **Cryptographic Standards:**
+  - Use only approved ciphers and modes (e.g., AES-GCM); avoid insecure block modes (ECB)
+  - Use approved hash functions; avoid MD5, SHA-1 for cryptographic purposes
+  - Generate random numbers/strings with CSPRNG and at least 128 bits entropy
+  - Store passwords using approved, computationally intensive key derivation functions
+- **TLS Configuration:**
+  - Prefer TLS 1.3; support TLS 1.2 only with strong cipher suites; disable weak/deprecated protocols
+  - External-facing services must use publicly trusted certificates
+  - Validate certificates before TLS communication; use trusted certificates for internal services
+
+### File Upload and Handling
+
+- **File Security:**
+  - Accept only files of processable size to prevent DoS
+  - Validate file extension matches expected type and content matches type (magic bytes)
+  - Files in public folders must not be executable as server-side code
+  - Scan uploaded files for malware before processing
+  - Validate compressed files against max uncompressed size and file count
+  - Sanitize user-submitted filenames; use trusted data for file paths
+
+### Error Handling and Logging
+
+- **Error Management:**
+  - Avoid revealing sensitive information in user-facing error messages
+  - Return generic messages for unexpected/security-sensitive errors
+  - Continue secure operation when external resources fail (circuit breakers)
+  - Define "last resort" error handler for unhandled exceptions
+- **Security Logging:**
+  - Log all authentication operations (success/failure) with metadata
+  - Log failed authorization attempts and security control bypass attempts
+  - Include necessary metadata (when, where, who, what) for investigation
+  - Protect logs from unauthorized access; transmit securely to separate system
+  - Encode log data to prevent log injection attacks
+  - Do not log credentials, tokens, secrets, or sensitive PII; implement field-level redaction; include correlationId/traceId where available
+
+### Data Protection
+
+- **Sensitive Data Handling:**
+  - Send sensitive data only in HTTP body/headers, not URLs/query strings
+  - Clear authenticated data from client storage after session termination
+  - Classify sensitive data and implement appropriate protection controls
+  - Use anti-caching headers for sensitive data responses
+  - Set `Cache-Control: no-store` (and `Pragma: no-cache` where applicable) on responses containing sensitive data
+  - Remove sensitive information from file metadata unless user consents
+
+### Dependency and Configuration Management
+
+- **Dependency Security:**
+  - Regularly scan dependencies for vulnerabilities (OWASP Dependency-Check, npm audit)
+  - Keep dependencies up-to-date with documented remediation timeframes
+  - Maintain inventory (SBOM) of third-party libraries from trusted sources
+  - Avoid dependencies for trivial functionality that can be self-implemented
+- **Production Configuration:**
+  - Disable debug modes in production environments
+  - Remove test/dev/sample code from production
+  - Hide detailed version information in HTTP headers
+  - Ensure no source control metadata is accessible
+
+## Examples
+
+<example>
+  # Good: Parameterized Query (General)
+  ```javascript
+  // Using parameterized query to prevent SQL injection
+  const results = await db.query(
+    'SELECT * FROM products WHERE category = ? AND price < ?',
+    [userCategory, maxPrice]
+  );
+  ```
+  *Explanation: User input is safely parameterized, preventing SQL injection.*
+</example>
+
+<example type="invalid">
+  # Bad: String Concatenation in Query
+  ```javascript
+  // NEVER do this - vulnerable to SQL injection
+  const query = `SELECT * FROM products WHERE category = '${userCategory}'`;
+  const results = await db.query(query);
+  ```
+  *Explanation: Direct string concatenation allows SQL injection attacks.*
+</example>
+
+<example>
+  # Good: Secure Session Cookie Configuration
+  ```javascript
+  app.use(session({
+    cookie: {
+      secure: true,        // HTTPS only
+      httpOnly: true,      // No client-side access
+      sameSite: 'strict',  // CSRF protection
+      maxAge: 3600000     // 1 hour expiration
+    }
+  }));
+  ```
+  *Explanation: Proper cookie security attributes prevent various attacks.*
+</example>
+
+<example>
+  # Good: Content Security Policy Header
+  ```http
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-random123'; object-src 'none'; base-uri 'none'
+  ```
+  *Explanation: Restricts resource loading to prevent XSS and injection attacks.*
+</example>
+
+<example type="invalid">
+  # Bad: Storing Sensitive Tokens in Browser Storage
+  ```javascript
+  // NEVER store sensitive tokens in browser storage
+  localStorage.setItem('authToken', jwtToken);
+  sessionStorage.setItem('refreshToken', refreshToken);
+  ```
+  *Explanation: Browser storage is vulnerable to XSS attacks.*
+</example>
+
+<example>
+  # Good: Proper File Upload Validation
+  ```javascript
+  const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  
+  if (!allowedTypes.includes(file.mimetype)) {
+    throw new Error('Invalid file type');
+  }
+  if (file.size > maxSize) {
+    throw new Error('File too large');
+  }
+  // Additional magic byte validation
+  const fileBuffer = await file.buffer();
+  if (!isValidFileSignature(fileBuffer, file.mimetype)) {
+    throw new Error('File content does not match declared type');
+  }
+
+  ```
+  *Explanation: Multiple validation layers prevent malicious file uploads.*
+</example>
+
+## Critical Rules
+- **Input/Output:** ALWAYS validate and sanitize external input; encode output appropriately for context
+- **Authentication:** NEVER use Implicit Grant OAuth flow; always use Authorization Code with PKCE
+- **Secrets:** NEVER hardcode credentials; use secrets management solutions
+- **Authorization:** ALWAYS verify user permissions for data access (prevent IDOR); apply least privilege
+- **Sessions:** INVALIDATE sessions server-side on logout/timeout; use secure cookies, not browser storage
+- **Headers:** IMPLEMENT CSP, HSTS, secure cookies, and CORS policies for web applications
+- **TLS:** USE only TLS 1.2+ with strong ciphers; validate certificates
+- **Logging:** LOG security events (auth failures, bypass attempts) with sufficient context
+- **Dependencies:** SCAN regularly for vulnerabilities; keep updated with documented timelines
+- **Files:** VALIDATE file uploads (type, size, content); scan for malware
+- **Errors:** NEVER expose sensitive data in error messages; fail securely
+- **Tokens:** VALIDATE self-contained tokens; use proper algorithms; enforce expiration

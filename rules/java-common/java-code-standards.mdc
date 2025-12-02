@@ -1,0 +1,288 @@
+---
+description: Java standards (Java 21+) for code style, design, and language features
+globs: **/*.java
+alwaysApply: true
+---
+
+# Java Code Style and Standards
+
+## Context
+
+- When writing Java code
+- When reviewing Java code
+- When modifying existing Java code
+- When implementing new features
+- When refactoring existing code
+- Applies to projects using Java 21 or later
+
+## Requirements
+
+### Class Documentation
+
+Provide Javadoc for classes that form the public API surface or are externally consumed, and for classes whose intent is non‑obvious. Internal or trivial classes do not require Javadoc.
+
+**IMPORTANT:** Do NOT include `@author`, `@version`, or `@since` tags in Javadoc comments. These tags are not needed and should not be added by code generation tools or agents.
+
+```java
+/**
+ * Brief one-line description of the class.
+ * <p>
+ * More detailed description of the class functionality,
+ * including its purpose, key features, and usage examples.
+ * </p>
+ */
+```
+
+### Method Documentation
+
+Document methods that are part of the public API surface (externally consumed) or that have non‑obvious behavior, side-effects, or constraints. For trivial/internal methods, method-level Javadoc is optional.
+
+```java
+/**
+ * Brief description of what the method does.
+ * <p>
+ * More detailed description if necessary, including any
+ * important implementation details or usage notes.
+ * </p>
+ *
+ * @param paramName Description of the parameter
+ * @return Description of the return value
+ * @throws ExceptionType Description of when/why this exception is thrown
+ * @see RelatedClass#relatedMethod()
+ */
+```
+
+### Field Documentation
+
+Document all class-level fields that are part of the public API:
+
+```java
+/** Maximum number of retry attempts for the operation */
+private static final int MAX_RETRIES = 3;
+
+/** Current status of the operation */
+private OperationStatus status;
+```
+
+### Code Organization
+
+1. **Class Structure** (in order):
+    - Package declaration
+    - Imports (organized and grouped)
+    - Class documentation
+    - Class declaration
+    - Static fields
+    - Instance fields
+    - Constructors
+    - Public methods
+    - Protected methods
+    - Private methods
+    - Inner classes
+
+2. **Import Organization**:
+    - Java core libraries
+    - Third-party libraries
+    - Project-specific imports
+    - No wildcard imports (`*`)
+
+### Naming Conventions
+
+1. **Classes**:
+    - PascalCase
+    - Nouns or noun phrases
+    - Clear and descriptive
+
+2. **Methods**:
+    - camelCase
+    - Verb or verb phrases
+    - Clear purpose indication
+
+3. **Variables**:
+    - camelCase
+    - Meaningful names
+    - No single-letter names (except for loops)
+
+4. **Constants**:
+    - UPPER_SNAKE_CASE
+    - Clear and descriptive
+
+### Best Practices
+
+1. **Code Structure**:
+    - One class per file
+    - Class name matches file name
+    - Maximum file length: 400 lines
+    - Maximum method length: 30 lines
+    - Maximum class length: 300 lines
+
+2. **Error Handling**:
+    - Use specific exceptions
+    - Document all thrown exceptions
+    - Include error messages
+    - Implement proper cleanup
+
+3. **Logging**:
+    - Use SLF4J for logging
+    - Appropriate log levels
+    - Meaningful log messages
+    - Include context information
+
+4. **Testing**:
+    - Unit tests for all public methods
+    - Integration tests for workflows
+    - Mock external dependencies
+
+5. **Generics**:
+    - Always use parameterized types instead of raw types (e.g., `List<String>` not `List`).
+    - Use type tokens like `ParameterizedTypeReference` when necessary to preserve generic type information at runtime (e.g., with `RestTemplate`).
+
+### Language Features (Java 21+)
+
+1. **Virtual Threads**
+    - Use for I/O-bound or blocking operations where high throughput is needed.
+    - Do not pool virtual threads; avoid heavy use of thread-locals.
+    - Ensure proper timeouts and backpressure on blocking I/O.
+    - Example:
+      ```java
+      try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+          executor.submit(() -> service.callBlockingApi());
+      }
+      ```
+
+2. **Sequenced Collections**
+    - Prefer `SequencedCollection`, `SequencedSet`, `SequencedMap` when a defined encounter order is required.
+    - Use `addFirst/addLast`, `getFirst/getLast`, and `reversed()` for clear intent.
+
+3. **Record Patterns (JEP 440)**
+    - Use record patterns for concise deconstruction, including within `instanceof` checks.
+    - Combine with type patterns to simplify branching.
+    - Example:
+      ```java
+      record Point(int x, int y) {}
+      if (obj instanceof Point(int x, int y)) {
+          draw(x, y);
+      }
+      ```
+
+4. **Pattern Matching for switch (JEP 441)**
+    - Prefer pattern matching in `switch` statements/expressions for type-safe branching.
+    - Handle `null` explicitly when switching on reference types.
+    - Example:
+      ```java
+      static int coverage(Object obj) {
+          return switch (obj) {
+              case null      -> 0;
+              case String s  -> s.length();
+              case Integer i -> i;
+              default        -> 0;
+          };
+      }
+      ```
+
+5. **Other Modern Features**
+    - **Records**: Use for immutable data carriers instead of boilerplate POJOs.
+    - **Sealed classes/interfaces**: Use to control and document inheritance hierarchies.
+    - **Pattern matching for `instanceof`**: Prefer `if (o instanceof Foo f) { ... }`.
+    - **Text Blocks**: Use for multi-line strings (SQL/JSON/XML), with clear indentation.
+    - **`var`**: Use local variable inference when it improves readability and does not obscure type intent.
+
+### Code Examples
+
+#### Valid Example: Good class documentation
+
+```java
+/**
+ * Manages user authentication and authorization.
+ * <p>
+ * This class handles user authentication against the system,
+ * manages user sessions, and controls access to protected
+ * resources based on user permissions.
+ * </p>
+ */
+public class AuthenticationManager {
+    // Class implementation
+}
+```
+
+#### Invalid Example: Poor class documentation (missing detail)
+
+```java
+/** Manages auth */
+public class AuthenticationManager {
+    // Class implementation
+}
+```
+
+#### Valid Example: Good method documentation
+
+```java
+/**
+ * Authenticates a user with the provided credentials.
+ * <p>
+ * This method validates the user credentials against the
+ * authentication database and creates a new session if
+ * the credentials are valid.
+ * </p>
+ *
+ * @param username The user's login identifier
+ * @param password The user's password
+ * @return AuthenticationResult containing session information
+ * @throws AuthenticationException if credentials are invalid
+ * @throws DatabaseException if database access fails
+ */
+public AuthenticationResult authenticate(String username, String password) {
+    // Method implementation
+}
+```
+
+#### Invalid Example: Poor method documentation (no detail, missing tags)
+
+```java
+/** Authenticates user */
+public AuthenticationResult authenticate(String u, String p) { // Poor param names
+    // Method implementation
+}
+```
+
+#### Invalid Example: Incorrect method naming (violates camelCase)
+
+```java
+public void Process_User_Data(UserData data) {
+    // Method implementation
+}
+```
+
+#### Invalid Example: Incorrect constant naming (violates UPPER_SNAKE_CASE)
+
+```java
+private static final int MaxRetries = 3;
+```
+
+#### Invalid Example: Incorrect usage of raw types (Generics)
+
+```java
+// Leads to unchecked warnings and potential ClassCastException
+ResponseEntity<List> response = restTemplate.getForEntity(url, List.class);
+List rawList = response.getBody();
+// String item = rawList.get(0); // Unsafe cast needed here
+
+// Correct usage with ParameterizedTypeReference
+ParameterizedTypeReference<List<String>> typeRef = new ParameterizedTypeReference<>() {};
+ResponseEntity<List<String>> safeResponse = restTemplate.exchange(url, HttpMethod.GET, null, typeRef);
+List<String> typedList = safeResponse.getBody();
+String item = typedList.get(0); // Safe access
+```
+
+## Critical Rules
+
+1. Document externally consumed public APIs and non‑obvious classes/methods with JavaDoc. **NEVER** include `@author`, `@version`, or `@since` tags in Javadoc comments.
+2. Keep documentation up to date with usage examples
+3. Follow SOLID principles and maintain high cohesion, low coupling
+4. Use dependency injection and implement proper error handling
+5. Maintain test coverage above 80%
+6. Write tests before fixing bugs and include edge cases
+7. Use appropriate data structures and optimize database queries
+8. Consider memory usage and handle resources properly
+9. No compiler warnings, checkstyle violations, or SonarQube issues
+10. Prefer modern Java 21+ features (records, pattern matching, virtual threads) where they add clarity or performance
+11. Handle `null` explicitly in `switch` pattern matching on reference types
