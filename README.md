@@ -1,4 +1,4 @@
-# RIA Cursor Prompts
+# Cursor Rules & prompts
 
 A collection of **Cursor AI rules** and **agent configurations** for building enterprise-grade applications. Designed for teams working with Java/Spring Boot backends and Nuxt/Vue frontends.
 
@@ -126,4 +126,3 @@ Contributions welcome! When adding new rules or agents:
 ## License
 
 [MIT](LICENSE) © 2025 E-government building blocks
-
