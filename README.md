@@ -1,6 +1,6 @@
-# Cursor Rules & prompts
+# Cursor Rules & Prompts
 
-A collection of **Cursor AI rules** and **agent configurations** for building enterprise-grade applications. Designed for teams working with Java/Spring Boot backends and Nuxt/Vue frontends.
+A collection of **Cursor AI rules**, **agent configurations**, and **reusable commands** for building enterprise-grade applications. Designed for teams working with Java/Spring Boot backends and Nuxt/Vue frontends.
 
 ## What's Included
 
@@ -22,6 +22,15 @@ Cursor rules (`.mdc` files) that automatically apply coding standards, security 
 | :---- | :---- | :----------- |
 | **Java** | Spring Boot 4 + Java 21 | jOOQ, Flyway migrations, OpenAPI code generation, Gradle workflows |
 | **Nuxt** | Nuxt 4 + Vue 3 + TypeScript | Orval API client, i18n, Vitest testing, TanStack Query |
+
+### 💬 Commands (`commands/`)
+
+Reusable prompt templates for common development tasks. Copy and paste into Cursor chat.
+
+| Command | Purpose |
+| :------ | :------ |
+| `code-review.md` | Structured code review workflow with severity levels and fix prioritization |
+| `deslop.md` | Remove AI-generated "slop" (unnecessary comments, defensive code, type bypasses) |
 
 ## Installation
 
@@ -90,12 +99,15 @@ These configurations are starting points. Adapt them to your project:
 ## Structure
 
 ```
-ria-cursor-prompts/
+cursor-prompts/
 ├── agents/
 │   ├── java/
 │   │   └── AGENTS.md          # Spring Boot agent configuration
 │   └── nuxt/
 │       └── AGENTS.md          # Nuxt/Vue agent configuration
+├── commands/                  # Reusable prompt templates
+│   ├── code-review.md
+│   └── deslop.md
 ├── rules/
 │   ├── common/                # Language-agnostic standards
 │   │   ├── component-technical-standards.mdc
