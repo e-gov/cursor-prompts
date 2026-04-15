@@ -1,0 +1,148 @@
+---
+description: TypeScript SPA application logging standards for Angular and Vue frontends
+globs: **/*.{ts,tsx}
+alwaysApply: true
+---
+
+
+# TypeScript Application Logging Standards (SPA Applications)
+
+## Context
+
+- Apply this rule when implementing general application logging in Angular and Vue SPA applications
+- This rule covers debugging, error handling, component lifecycle, and technical application events
+- For business events, security audit events, and user actions, use `typescript-common/audit-logging.mdc`
+- Frontend logging sends structured data to backend endpoints - backend handles infrastructure (storage, security, retention, etc.)
+
+## Requirements
+
+1. **Logging Service:** Use structured logging service that sends data to backend endpoints (`/api/logs/application`).
+2. **Encoding:** JSON format ensures UTF-8 encoding.
+3. **Language:** Use English for log messages and field names where possible.
+4. **User Input Handling:** Use parameterized logging, avoid string concatenation with user input.
+5. **Correlation ID:** Implement and consistently use a unique correlation ID for all logs within a *request or user action scope* (not a single ID for the whole app lifetime). Prefer propagating a correlation ID from the backend (e.g. response header or meta endpoint) and re-using it on subsequent frontend logs.
+6. **Log Levels & Usage:**
+    - **ERROR:** Unexpected errors, exceptions, and critical failures
+    - **WARN:** Handled errors, validation failures, and business rule violations
+    - **INFO:** Important application events, component lifecycle, and state changes
+    - **DEBUG:** Detailed debugging information (disabled in production)
+7. **Contextual Fields:** Include these fields in log entries:
+    - `correlationId`: Unique request/transaction ID
+    - `userId`: Current user identifier
+    - `sessionId`: Session identifier
+    - `applicationName`: Application identifier
+    - `eventType`: Business event type
+    - `eventResult`: 'SUCCESS' | 'FAILURE' | 'VALIDATION_ERROR'
+    - `timestamp`: ISO 8601 format
+    - `component`: Angular/Vue component name
+    - `url`: Current page URL
+    - `userAgent`: Browser/device information
+8. **Forbidden Data:** Strictly avoid logging data listed in the "Forbidden Data" section below.
+9. **Backend Integration:** Send logs to `/api/logs/application` endpoint with fallback to console.
+
+## Examples
+
+<example>
+```typescript
+// GOOD: Using structured logging service with per-request/user-action correlation ID
+function getCurrentCorrelationId(): string {
+  // Implement retrieval from request/route context or reuse a backend-provided ID.
+  // Generate a new ID only when starting a new logical user action.
+  return crypto.randomUUID();
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class LoggingService {
+  constructor(private http: HttpClient) {}
+
+  log(level: 'error' | 'warn' | 'info' | 'debug', message: string, context: any = {}) {
+    const logEntry = {
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+      correlationId: context.correlationId ?? getCurrentCorrelationId(),
+      applicationName: 'my-spa-app',
+      ...context
+    };
+
+    this.http.post('/api/logs/application', logEntry).subscribe({
+      error: () => console.log('LOG:', JSON.stringify(logEntry))
+    });
+  }
+}
+
+// Usage in component
+export class UserProfileComponent {
+  constructor(private loggingService: LoggingService) {}
+
+  ngOnInit() {
+    this.loggingService.log('debug', 'Component initialized', {
+      eventType: 'COMPONENT_INIT',
+      component: 'UserProfileComponent'
+    });
+  }
+
+  saveProfile(profileData: any) {
+    this.loggingService.log('info', 'Profile save started', {
+      eventType: 'PROFILE_SAVE_STARTED',
+      component: 'UserProfileComponent'
+    });
+  }
+}
+```
+</example>
+
+<example type="invalid">
+```typescript
+// BAD: Poor logging practices
+export class UserProfileComponent {
+  saveProfile(profileData: any) {
+    // BAD: No structured logging
+    console.log('Saving profile...');
+    
+    // BAD: Logging sensitive data
+    console.log('Profile data:', profileData);
+    
+    this.userService.updateProfile(profileData).subscribe({
+      next: (result) => {
+        // BAD: No context or structured format
+        console.log('Profile saved');
+      },
+      error: (error) => {
+        // BAD: No error context or structured format
+        console.error('Error saving profile:', error);
+      }
+    });
+  }
+}
+```
+</example>
+
+## Critical Rules
+
+- **NEVER** log forbidden data (passwords, tokens, PII) in any log entry
+- **ALWAYS** include correlation ID for request tracing
+- **USE** structured JSON logging format for backend transmission
+- **SEND** all logs to backend endpoints for infrastructure handling
+- **LOG** application errors, component lifecycle events, and technical issues
+- **INCLUDE** proper error context and stack traces for errors
+- **IMPLEMENT** proper error boundaries and global error handlers
+- **USE** appropriate log levels (ERROR, WARN, INFO, DEBUG)
+- **INCLUDE** contextual information (component, url, userAgent, etc.)
+- **LOG** both successful and failed operations
+- **USE** audit logging for business events and user actions
+- **FALLBACK** to console only if backend is unavailable
+
+## Forbidden Data
+
+**Under NO circumstances should the following data be logged:**
+
+1. User authentication secrets (passwords, tokens, private keys)
+2. Session tokens or cookies (log only hashed derivatives)
+3. Personal identifiable information (PII) unless required by law
+4. Credit card numbers or financial data
+5. Biometric data in replayable format
+6. Full database query results or large data sets
+7. Any data prohibited by GDPR or other regulations

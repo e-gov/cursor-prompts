@@ -1,0 +1,1031 @@
+---
+description: Nuxt TypeScript development conventions for components, state, SSR, and testing
+globs: **/*.{ts,vue}
+alwaysApply: true
+---
+
+# Nuxt Development Conventions
+
+## Context
+
+- Apply this rule when developing Nuxt applications
+- This rule complements `typescript-common/application-logging.mdc` and `typescript-common/audit-logging.mdc` for logging
+- For TypeScript code standards, see `typescript-common/typescript-code-standards.mdc`
+- For comprehensive security best practices, see `rules/common/security.mdc`
+- Follow Vue style guide and Nuxt best practices
+- Convention over Configuration: Adhere to Nuxt 4 conventions to simplify development and collaboration
+
+## Requirements
+
+### 1. Project Structure
+
+- **Feature-based organization**: Group related components, composables, and stores by feature
+- **Shared components**: Create shared components for common functionality
+- **Lazy loading**: Implement lazy loading for route components
+- **Directory Structure**: Co-locate related files:
+  ```
+  .
+  ├── app/                      # Nuxt 4 uses app/ directory
+  │   ├── assets/               # Assets processed by build tools (CSS, images, fonts)
+  │   ├── components/
+  │   │   ├── [feature-name]/
+  │   │   │   └── FeatureComponent.vue
+  │   │   └── MyComponent.vue
+  │   ├── composables/
+  │   │   └── useUser.ts
+  │   ├── layouts/
+  │   │   └── default.vue
+  │   ├── middleware/           # Route middleware
+  │   │   └── auth.ts
+  │   ├── pages/                # File-based routing
+  │   │   ├── [feature-name]/
+  │   │   │   └── feature-page.vue
+  │   │   └── index.vue
+  │   ├── plugins/
+  │   │   └── analytics.ts
+  │   ├── store/
+  │   │   └── user-store.ts
+  │   ├── utils/                # Utility functions
+  │   │   └── formatDate.ts
+  │   ├── app.config.ts         # Reactive configuration (optional, no secrets!)
+  │   ├── app.vue               # Root application component (optional)
+  │   └── error.vue             # Error page (optional)
+  ├── modules/                  # Custom Nuxt modules
+  ├── public/                   # Static assets (images, fonts)
+  ├── server/                   # API routes and server-side logic
+  │   ├── api/
+  │   ├── routes/
+  │   └── middleware/
+  └── test/                     # Mirror app/ structure for test files
+      ├── unit/
+      ├── integration/
+      └── e2e/
+  ```
+
+### 2. File Naming Conventions
+
+- **Components**: `PascalCase.vue` (e.g., `MyComponent.vue`)
+- **Composables**: `usePascalCase.ts` (e.g., `useUser.ts`)
+- **Layouts**: `kebab-case.vue` (e.g., `default.vue` or `custom-layout.vue`)
+- **Pages**: `kebab-case.vue` (e.g., `index.vue`, `about.vue`, `product-details.vue`)
+- **Plugins**: `kebab-case.ts` (e.g., `analytics.ts`, `matomo-tag-manager.ts`)
+- **Middleware**: `kebab-case.ts` (e.g., `auth.ts`, `guest-only.ts`)
+- **Stores**: `kebab-case.ts` (e.g., `user-store.ts`)
+- **Utils**: `camelCase.ts` (e.g., `formatDate.ts`)
+
+### 3. Nuxt Layers
+
+- **What are Layers**: Layers are a powerful way to share and extend Nuxt applications. They allow you to create reusable configurations, components, composables, and more.
+- **Use Cases**:
+  - Share common UI components across multiple projects
+  - Create a base configuration for all your organization's Nuxt apps
+  - Extract reusable features into separate layers
+  - Build monorepo structures with shared code
+- **Layer Structure**: A layer is essentially a Nuxt application that can be extended by another Nuxt app:
+  ```
+  layers/my-name/
+  ├── nuxt.config.ts    # Layer configuration
+  └── app/              # Follows app directory structure
+  ```
+- **Layer Best Practices**:
+  - Keep layers focused on specific concerns (UI, auth, utilities)
+  - Document layer dependencies and requirements
+  - Test layers independently before integrating
+  - Prefer layers for sharing application code, modules for extending functionality
+
+### 4. Nuxt Modules
+
+- Group related functionalities into separate modules or layers
+- Use the `modules` array in `nuxt.config.ts` to register modules
+- Create custom modules to encapsulate complex logic
+- Adopt Nuxt.js modules to encapsulate functionalities and maintain a clean codebase
+- Explore existing modules before implementing custom solutions
+
+### 5. Component Conventions
+
+- **Single file components**: Use .vue files with single file component format
+- **Composition API**: Use Composition API with `<script setup>` for new components
+- **Props validation**: Always validate component props with TypeScript interfaces
+- **Emits declaration**: Declare component emits with TypeScript interfaces
+- **Auto-imports**: Use auto-imports for Vue composables and utilities
+- **TypeScript-first**: Use TypeScript for all component logic and type definitions
+- **Reusability and testability**: Design components with simplicity, reusability, composability and testability in mind
+- **Template slots**: Consider using slots for flexible component composition
+- **API & business logic**: Extract API calls and business logic to composables for reusability and testability
+- **Accessibility (A11y)**: Ensure components are accessible by using semantic HTML, providing ARIA attributes where necessary, and testing with screen readers
+- **Divide Pages into Components**: Break down pages into small, reusable components to enhance maintainability, testability, and reusability. Each component should have a single responsibility.
+- **Code Splitting**:
+  - Utilize dynamic imports for route-based code splitting (automatic in Nuxt)
+  - Split large components into smaller chunks using `import()` or `defineAsyncComponent()`
+  - Use the `lazy` prefix for lazy-loaded components (e.g., `<LazyMyComponent />`)
+  - Analyze bundle size with `nuxi analyze`
+
+### 6. Composition API Conventions
+
+- **Composables**: Create reusable composables for shared logic with `use` prefix
+- **Reactive refs**: Use ref() for primitive values, reactive() for objects
+- **Computed properties**: Use computed() for derived state with proper caching
+- **Watchers**: Use watch() and watchEffect() for side effects with proper cleanup
+- **Lifecycle hooks**: Use onMounted, onUnmounted for lifecycle management
+- **Script setup**: Use `<script setup>` syntax for better performance and DX
+- **Auto-imports**: Configure auto-imports for Vue composables and utilities
+- **TypeScript integration**: Use proper TypeScript generics for composables
+- **Reactivity optimization**: Use shallowRef() for large objects, markRaw() for non-reactive data
+- **Prefer VueUse**: Use VueUse where applicable, instead of creating custom composables
+- **API requests**: Prefer generated clients (OpenAPI Generator, Orval); otherwise create dedicated composables using Nuxt's `useFetch` or `useAsyncData`
+- **Nuxt Data Fetching**:
+  - Use `useFetch` for composable-level data fetching (automatically handles SSR/CSR)
+  - Use `$fetch` for manual API calls (Nuxt's fetch wrapper)
+  - Use `useAsyncData` when you need more control over data fetching
+  - Leverage `useLazyFetch` and `useLazyAsyncData` for lazy-loaded, non-blocking data
+  - Use `getCachedData` option in `useFetch` for client-side caching
+
+### 7. State Management
+
+- **Pinia**: Use Pinia for state management when explicitly required or for SSR applications
+- **Prefer Composables**: Use composables for simpler and cleaner state management by default
+- **useState**: Use Nuxt's `useState` composable for simple shared state (SSR-safe)
+- **Stores**: Create feature-based stores with proper TypeScript typing
+- **Store patterns**: Use both composition API and options API store patterns appropriately
+- **State persistence**: Use VueUse for persistent state (localStorage/sessionStorage)
+- **Composables**: Use composables for local state and shared logic
+- **Props**: Use props for parent-child communication with validation
+- **Emits**: Use emits for child-parent communication with TypeScript interfaces
+- **Provide/Inject**: Use provide/inject for deep component communication
+- **Reactive state**: Use reactive() for complex state objects
+- **Store composition**: Use store composition for complex state management
+- **Overusing global state**: Limit the use of global state to essential application data
+- **Single Source of Truth**: Maintain a single, consistent source of truth for application state
+- **SSR-Safe State**: Ensure state is properly initialized on both server and client
+
+### 8. Routing Conventions
+
+- **File-based Routing**: Nuxt uses file-based routing (built on Vue Router)
+- **Route guards**: Implement guards for authentication and authorization using middleware
+- **Lazy loading**: Use lazy loading for route components (automatic in Nuxt)
+- **Route naming**: Use descriptive route names
+- **Middleware Pattern**: Use route middleware for authentication, authorization, and guards
+- **Middleware Execution Order**: Understand middleware execution order (global -> layout -> page)
+
+### 9. Styling Conventions
+
+- **Scoped styles**: Use scoped styles for component-specific complex CSS or when unable to use Tailwind
+- **CSS modules**: Use CSS modules for complex styling with TypeScript support
+- **Tailwind CSS**: Use Tailwind CSS for utility-first styling with proper configuration
+- **Design tokens**: Use consistent design tokens and CSS custom properties
+- **CSS-in-JS**: Use CSS-in-JS solutions when needed for dynamic styling
+- **Style organization**: Use consistent class naming (BEM, utility-first, etc.)
+- **Responsive design**: Use Vue's responsive utilities and CSS media queries
+
+### 10. Error Handling
+
+- **Error Pages**: Create `error.vue` in app root for custom error pages
+- **useError Composable**: Use `useError()` to handle and display errors programmatically
+- **clearError**: Use `clearError()` to clear error state and navigate away from error page
+- **API Error Handling**: Handle API errors gracefully with `useFetch` error handling:
+  ```ts
+  const { data, error } = await useFetch('/api/data')
+  if (error.value) {
+    // Handle error
+  }
+  ```
+- **Server Error Handling**: Use server middleware and error handlers for API routes
+- **User-Friendly Error Messages**: Provide clear and helpful error messages to users
+- **Try/Catch**: Use `try/catch` with API calls and check the `error` property
+
+### 11. SSR and Hydration
+
+- **SSR Concerns**: Remember that code runs on both server and client. Avoid using browser-only APIs without checks.
+- **Environment Checks**:
+  - Use `import.meta.client` for client-only code
+  - Use `import.meta.server` for server-only code
+  - Use `onMounted()` hook for browser-only code
+- **ClientOnly Component**: Use `<ClientOnly>` component for client-only components
+- **Hydration Mismatches**:
+  - Ensure server-rendered HTML matches client-rendered HTML
+  - Avoid conditional rendering that differs between SSR and CSR
+  - Avoid using random values or timestamps that differ between SSR and CSR
+  - Use `data-` attributes carefully
+- **State Persistence**: Be mindful of state persistence between requests on the server
+
+### 12. Testing Conventions
+
+- **Unit tests**: Write unit tests for all components and composables using Vitest
+- **Integration tests**: Write integration tests for feature workflows
+- **E2E tests**: Use Playwright for end-to-end testing
+- **Test naming**: Use descriptive test names with proper structure
+- **Component testing**: Use Nuxt Test Utils `@nuxt/test-utils` for component testing
+- **mountSuspended**: Use `mountSuspended` from `@nuxt/test-utils` for testing components with async setup
+- **Mocking**: Use proper mocking strategies for external dependencies
+  - Use Vitest's `vi.mock()` for mocking modules
+  - Mock composables like `useFetch`, `useRoute`, etc.
+  - Use `$fetch` mock for API responses
+  - Mock Nuxt context with `@nuxt/test-utils`
+- **Test coverage**: Maintain high test coverage for critical business logic
+- **Testing utilities**: Create reusable testing utilities and helpers
+- **Test SSR and CSR**: Test both server-side and client-side rendering
+- **Test Error States**: Test error handling and edge cases
+- **Test Loading States**: Test loading states and skeleton screens
+- **Test Accessibility**: Include accessibility testing in your test suite
+- **Test Hydration**: Include SSR/hydration testing in e2e tests
+- **Test Organization**:
+  - Place unit tests in `test/unit/`
+  - Place integration tests in `test/integration/`
+  - Place e2e tests in `test/e2e/`
+  - Keep tests isolated from each other to avoid interference
+
+### 13. Performance Considerations
+
+- **Lazy Loading**:
+  - Use `<LazyMyComponent />` prefix for lazy-loaded components
+  - Use `useLazyFetch` and `useLazyAsyncData` for non-blocking data fetching
+- **Code Splitting**:
+  - Automatic route-based code splitting (built-in)
+  - Use dynamic imports for heavy libraries: `const lib = await import('heavy-lib')`
+  - Split components using `defineAsyncComponent()` when needed
+- **Tree Shaking**:
+  - Nuxt automatically tree-shakes unused code
+  - Import only what you need from libraries
+- **Caching**:
+  - Use `getCachedData` option in `useFetch` for client-side caching
+  - Implement server-side caching with Nitro's cache API
+  - Cache static assets with proper headers
+- **Memory Management**:
+  - Clean up event listeners in `onBeforeUnmount` hook
+  - Clear intervals and timeouts properly
+  - Use `watch` with proper cleanup
+  - Create composables that handle lifecycle cleanup automatically
+  - Minimize object creation in reactive contexts
+- **Rendering Optimization**:
+  - Use virtualization for large lists (VueUse library)
+  - Use `computed()` for expensive calculations to avoid redundant computations
+  - Use `v-memo` directive to skip re-renders of parts of the template
+  - Use VueUse's `useDebounceFn` and `useThrottleFn` for event handlers
+  - Use `<KeepAlive>` to cache component instances for better performance
+- **Bundle Size Optimization**:
+  - Use `nuxi analyze` to identify large dependencies
+  - Remove unused dependencies to reduce bundle size
+  - Consider using smaller alternatives to large libraries
+  - Use tree-shakable imports (import specific functions instead of entire libraries)
+  - Use `nitro.prerender` for static pages to reduce runtime overhead
+
+### 14. Modern Vue 3 Features
+
+- **Teleport**: Use teleport for modal dialogs and overlays
+- **Suspense**: Use Suspense for async component loading
+- **Fragments**: Use multiple root nodes when needed
+- **v-memo**: Use v-memo for performance optimization in lists
+- **CSS v-bind**: Use CSS v-bind for dynamic styling
+- **Custom directives**: Create custom directives for reusable DOM manipulation
+- **Plugin system**: Use plugins for global functionality (but prefer composables for reusable logic)
+- **DevTools integration**: Ensure proper DevTools integration for debugging
+- **Internationalization (i18n)**: Implement i18n from the start - use a library like `vue-i18n` to manage translations
+- **Vue 3.5+ Features**: Leverage new Vue 3.5+ features like `defineModel()`, `useId()`
+
+### 15. Advanced TypeScript Patterns
+
+- **Template refs typing**: Use proper typing for template references with generics
+- **Generated API integration**: Integrate OpenAPI/Orval generated types and clients
+- **VueUse integration**: Use VueUse composables for browser APIs and state persistence
+- **Component instance typing**: Extract component props and instance types properly
+- **Utility type patterns**: Create advanced utility types for Vue-specific use cases
+- **State persistence**: Implement type-safe state persistence with VueUse
+- **API client typing**: Use proper typing for API responses and error handling
+- **Store typing**: Implement advanced Pinia store patterns with TypeScript
+
+### 16. Tooling and Environment
+
+- **Build Configuration**:
+  - `nuxt.config.ts`: TypeScript configuration file (recommended)
+  - Configure app settings, modules, plugins, and build options
+- **Nitro**: Nuxt uses Nitro as the server engine, providing universal deployment with minimal configuration
+- **Vite**: Default bundler providing fast HMR and build times
+- **TypeScript**: Built-in TypeScript support without additional configuration; type-safe auto-imports and better IDE support
+- **TypeScript Validation**: Run `nuxi typecheck` for TypeScript validation
+- **Debugging**:
+  - Use Nuxt DevTools (built-in) for comprehensive debugging
+  - Inspect pages, components, composables, and server routes
+  - Use Vue Devtools browser extension for Vue-specific debugging
+  - Check server logs for SSR errors and API issues
+  - Enable debug mode in `nuxt.config.ts` for verbose logging
+
+### 17. Common Pitfalls and Anti-patterns
+
+- **Using Browser-Only APIs in SSR**:
+  - Always check if code runs on server or client
+  - Use `import.meta.client` or `import.meta.server` for conditional logic
+  - Use `onMounted()` hook for browser-only code
+- **Async Data Handling Mistakes**:
+  - Not handling loading and error states with `useFetch`
+  - Using `async/await` without proper error handling
+  - Fetching data in `onMounted` instead of using `useFetch` or `useAsyncData`
+- **Forgetting Auto-Imports**:
+  - Manually importing composables, components, or utilities that Nuxt auto-imports
+  - Not configuring custom auto-imports in `nuxt.config.ts`
+- **Memory Leaks**:
+  - Forgetting to clean up event listeners, intervals, or watchers
+  - Not using `onBeforeUnmount` for cleanup
+- **Hydration Mismatches**:
+  - Different content rendered on server vs client
+  - Using random values or timestamps that differ between SSR and CSR
+  - Improperly handling client-only content
+- **Mutating props directly**: Avoid modifying parent component data directly from child components. Use `emit` or `defineModel()` instead.
+- **Overusing global state**: Limit the use of global state to essential application data. Use local reactive state or composables for component-level data.
+- **Writing overly complex components**: Break down large components into smaller, more manageable pieces.
+- **Overusing plugins**: Only use plugins for truly global functionality. Prefer composables for reusable logic.
+- **Not using TypeScript**: Nuxt has excellent TypeScript support. Use it for better type safety and developer experience.
+
+## Examples
+
+<example>
+```vue
+<!-- GOOD: Proper Vue 3 + Nuxt component structure -->
+<script setup lang="ts">
+// Type definitions
+type UserProfile = {
+  id: string
+  name: string
+  email: string
+  avatar?: string
+}
+
+// Props with TypeScript interface and validation
+type Props = {
+  userId: string
+  readonly?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  readonly: false
+})
+
+// Emits with TypeScript interface
+type Emits = {
+  (e: 'profile-updated', profile: UserProfile): void
+  (e: 'profile-deleted'): void
+}
+
+const emit = defineEmits<Emits>()
+
+// Composables (auto-imported by Nuxt)
+const userStore = useUserStore()
+const loggingService = useLoggingService()
+const { t } = useI18n()
+
+// Nuxt data fetching with proper error handling
+const { data: userData, error, pending } = await useFetch<UserProfile>(
+  () => `/api/users/${props.userId}`,
+  {
+    key: `user-${props.userId}`,
+    getCachedData: (key, nuxtApp) => nuxtApp.payload.data[key]
+  }
+)
+
+// Reactive state with proper typing
+const isLoading = ref(false)
+const user = computed(() => userData.value ?? userStore.getUser(props.userId))
+const canEdit = computed(() => !props.readonly && user.value?.canEdit)
+
+// Methods with proper error handling
+async function saveProfile(profileData: Partial<UserProfile>) {
+  if (!canEdit.value) return
+
+  isLoading.value = true
+
+  try {
+    const updatedProfile = await userStore.updateProfile(props.userId, profileData)
+
+    loggingService.log('info', 'User profile saved', {
+      eventType: 'USER_PROFILE_SAVED',
+      component: 'UserProfile',
+      userId: props.userId,
+      updatedFields: Object.keys(profileData)
+    })
+
+    emit('profile-updated', updatedProfile)
+  } catch (error) {
+    loggingService.log('error', 'Failed to save user profile', {
+      eventType: 'USER_PROFILE_SAVE_ERROR',
+      component: 'UserProfile',
+      userId: props.userId,
+      error: { message: error.message }
+    })
+
+    throw error // Re-throw for component to handle
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Lifecycle with proper cleanup
+onMounted(() => {
+  loggingService.log('debug', 'UserProfile component mounted', {
+    eventType: 'COMPONENT_MOUNTED',
+    component: 'UserProfile',
+    userId: props.userId
+  })
+})
+
+onUnmounted(() => {
+  loggingService.log('debug', 'UserProfile component unmounted', {
+    eventType: 'COMPONENT_UNMOUNTED',
+    component: 'UserProfile',
+    userId: props.userId
+  })
+})
+
+// Expose methods for parent components
+defineExpose({
+  saveProfile
+})
+</script>
+
+<template>
+  <div class="flex flex-col p-8 user-profile">
+    <!-- Loading state -->
+    <div v-if="pending">Loading...</div>
+
+    <!-- Error state -->
+    <div v-else-if="error">
+      Error loading user: {{ error.message }}
+    </div>
+
+    <!-- Content -->
+    <template v-else>
+      <h1>{{ user?.name }}</h1>
+      <button @click="saveProfile" :disabled="isLoading">
+        {{ isLoading ? 'Saving...' : 'Save Profile' }}
+      </button>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.user-profile {
+  /* Use scoped styles for complex styling not suitable for utility classes */
+}
+</style>
+```
+</example>
+
+<example>
+```typescript
+// GOOD: Advanced Pinia store patterns with TypeScript
+
+// Composition API style store (modern approach)
+export const useMessageStore = defineStore('messages', () => {
+  // State with proper typing
+  const messages = ref<MessageOutputModal[]>([])
+  const loading = ref(false)
+  const error = ref<Error | null>(null)
+
+  // Persistent state with VueUse
+  const selectedPageSize = useSessionStorage<number>('selectedPageSize', 50)
+  const filters = useSessionStorage<MessageFilters>('messagesFilters', {
+    status: [MessageStatus.REGISTERED, MessageStatus.IN_PROGRESS],
+    direction: [],
+    priority: []
+  })
+
+  // Computed values
+  const filteredMessages = computed(() =>
+    messages.value.filter(msg => matchesFilters(msg, filters.value))
+  )
+
+  const totalCount = computed(() => messages.value.length)
+
+  // Actions with proper error handling
+  async function fetchMessages(params: GetMessagesParams): Promise<void> {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await getMessages(params)
+      messages.value = response.data?.content ?? []
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw error.value
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function setFilters(newFilters: Partial<MessageFilters>) {
+    filters.value = { ...filters.value, ...newFilters }
+  }
+
+  // Reset function
+  function reset() {
+    messages.value = []
+    loading.value = false
+    error.value = null
+  }
+
+  return {
+    // State
+    messages: readonly(messages),
+    loading: readonly(loading),
+    error: readonly(error),
+    selectedPageSize,
+    filters,
+
+    // Computed
+    filteredMessages,
+    totalCount,
+
+    // Actions
+    fetchMessages,
+    setFilters,
+    reset
+  }
+})
+
+// Options API style store (traditional approach)
+export const useUserStore = defineStore('users', {
+  state: (): UserStoreState => ({
+    users: [],
+    currentUser: null,
+    loading: false,
+    // Persistent state with VueUse
+    preferences: useLocalStorage<UserPreferences>('userPreferences', {
+      theme: 'light',
+      language: 'en'
+    })
+  }),
+
+  getters: {
+    isAuthenticated: (state): boolean => state.currentUser !== null,
+
+    userById: (state) => (id: string): User | undefined =>
+      state.users.find(user => user.id === id),
+
+    totalUsers: (state): number => state.users.length
+  },
+
+  actions: {
+    async fetchUser(id: string): Promise<User> {
+      this.loading = true
+
+      try {
+        const response = await getUserById(id)
+        const user = response.data
+
+        // Update users array
+        const index = this.users.findIndex(u => u.id === id)
+        if (index !== -1) {
+          this.users[index] = user
+        } else {
+          this.users.push(user)
+        }
+
+        return user
+      } catch (error) {
+        throw new Error(`Failed to fetch user: ${error.message}`)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    setCurrentUser(user: User | null) {
+      this.currentUser = user
+    },
+
+    updatePreferences(newPrefs: Partial<UserPreferences>) {
+      this.preferences = { ...this.preferences, ...newPrefs }
+    }
+  }
+})
+
+// Store interfaces
+interface MessageFilters {
+  status: MessageStatus[]
+  direction: MessageDirection[]
+  priority: MessagePriority[]
+  search?: string
+}
+
+interface UserStoreState {
+  users: User[]
+  currentUser: User | null
+  loading: boolean
+  preferences: Ref<UserPreferences>
+}
+
+interface UserPreferences {
+  theme: 'light' | 'dark'
+  language: string
+}
+```
+</example>
+
+<example>
+```vue
+<!-- GOOD: Advanced component patterns with template refs and typing -->
+<template>
+  <div class="message-filter">
+    <form @submit.prevent="applyFilter">
+      <!-- Component ref with proper typing -->
+      <Litepicker
+        ref="datePickerRef"
+        v-model="formData.dateRange"
+        :options="datePickerOptions"
+      />
+
+      <!-- Multiple component refs -->
+      <TomSelect
+        ref="statusSelectRef"
+        v-model="formData.status"
+        :options="statusOptions"
+        multiple
+      />
+
+      <Button
+        ref="submitButtonRef"
+        type="submit"
+        :disabled="isSubmitting"
+      >
+        Apply Filter
+      </Button>
+    </form>
+  </div>
+</template>
+
+<script setup lang="ts">
+import type { MessageFilters } from '@/stores/message.store'
+import { useMessageStore } from '@/stores/message.store'
+import { storeToRefs } from 'pinia'
+
+// Component instance typing
+type LitepickerType = InstanceType<typeof Litepicker>
+type TomSelectType = InstanceType<typeof TomSelect>
+type ButtonType = InstanceType<typeof Button>
+
+// Extract component props typing
+type ExtractProps<T> = InstanceType<T>['$props']
+type LitepickerProps = ExtractProps<typeof Litepicker>
+
+// Props interface
+interface MessageFilterProps {
+  initialFilters?: Partial<MessageFilters>
+  disabled?: boolean
+}
+
+const props = withDefaults(defineProps<MessageFilterProps>(), {
+  disabled: false
+})
+
+// Emits interface
+interface MessageFilterEmits {
+  (e: 'filter-applied', filters: MessageFilters): void
+  (e: 'filter-reset'): void
+}
+
+const emit = defineEmits<MessageFilterEmits>()
+
+// Template refs with proper typing
+const datePickerRef = useTemplateRef<LitepickerType>('datePickerRef')
+const statusSelectRef = useTemplateRef<TomSelectType>('statusSelectRef')
+const submitButtonRef = useTemplateRef<ButtonType>('submitButtonRef')
+
+// Store integration
+const messageStore = useMessageStore()
+const { filters } = storeToRefs(messageStore)
+
+// VueUse composables
+const isOnline = useOnline()
+const windowSize = useWindowSize()
+const { copy, copied } = useClipboard()
+
+// Reactive state
+const isSubmitting = ref(false)
+const formData = ref<MessageFilters>({
+  status: [],
+  direction: [],
+  priority: [],
+  dateRange: [],
+  search: '',
+  ...props.initialFilters
+})
+
+// Computed with proper typing
+const isFormValid = computed((): boolean => {
+  return formData.value.status.length > 0 ||
+         formData.value.search?.trim() !== ''
+})
+
+const datePickerOptions = computed((): LitepickerProps['options'] => ({
+  autoApply: true,
+  singleMode: false,
+  numberOfColumns: 2,
+  format: 'YYYY-MM-DD'
+}))
+
+// Methods with template ref access
+async function applyFilter(): Promise<void> {
+  if (!isFormValid.value || props.disabled) return
+
+  isSubmitting.value = true
+
+  try {
+    // Access template ref methods
+    const dateRange = datePickerRef.value?.getDates()
+    const selectedStatuses = statusSelectRef.value?.getSelected()
+
+    const filterData: MessageFilters = {
+      ...formData.value,
+      dateRange: dateRange || [],
+      status: selectedStatuses || []
+    }
+
+    await messageStore.setFilters(filterData)
+    emit('filter-applied', filterData)
+
+    // Focus management
+    submitButtonRef.value?.$el.blur()
+  } catch (error) {
+    console.error('Failed to apply filter:', error)
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+function resetFilter(): void {
+  // Reset form data
+  formData.value = {
+    status: [],
+    direction: [],
+    priority: [],
+    dateRange: [],
+    search: ''
+  }
+
+  // Reset component refs
+  datePickerRef.value?.reset()
+  statusSelectRef.value?.clear()
+
+  emit('filter-reset')
+}
+
+// Lifecycle with ref access
+onMounted(() => {
+  // Initialize component refs after mount
+  if (datePickerRef.value) {
+    datePickerRef.value.focus()
+  }
+})
+
+// Watch with typing
+watch(() => props.initialFilters, (newFilters) => {
+  if (newFilters) {
+    formData.value = { ...formData.value, ...newFilters }
+  }
+}, { deep: true })
+
+// Expose methods for parent access
+defineExpose({
+  applyFilter,
+  resetFilter,
+  focusDatePicker: () => datePickerRef.value?.focus(),
+  getFormData: () => formData.value
+})
+</script>
+```
+</example>
+
+<example>
+```typescript
+// GOOD: Generated API integration with TypeScript
+
+// Generated API types (from OpenAPI/Orval)
+import type {
+  MessageOutputModal,
+  MessageDetailViewResponseResponse,
+  GetMessagesParams,
+  CreateMessageRequest,
+  ApiResponse
+} from '@/generated/api/model'
+
+import {
+  getMessages,
+  getMessageDetailView,
+  createMessage,
+  type GetMessagesResult,
+  type CreateMessageResult
+} from '@/generated/api/messages/messages'
+
+// Service layer with proper typing
+export class MessageService {
+  static async fetchMessages(params: GetMessagesParams): Promise<MessageOutputModal[]> {
+    try {
+      const response: GetMessagesResult = await getMessages(params)
+      return response.data?.content ?? []
+    } catch (error) {
+      throw new MessageServiceError('Failed to fetch messages', error)
+    }
+  }
+
+  static async fetchMessageDetail(id: string): Promise<MessageDetailViewResponseResponse> {
+    try {
+      const response = await getMessageDetailView<AxiosResponse<MessageDetailViewResponseResponse>>(id)
+      return response.data
+    } catch (error) {
+      if (error.response?.status === 404) {
+        throw new NotFoundError(`Message with ID ${id} not found`)
+      }
+      throw new MessageServiceError('Failed to fetch message detail', error)
+    }
+  }
+
+  static async createMessage(data: CreateMessageRequest): Promise<MessageOutputModal> {
+    try {
+      const response: CreateMessageResult = await createMessage(data)
+      return response.data
+    } catch (error) {
+      throw new MessageServiceError('Failed to create message', error)
+    }
+  }
+}
+
+// Custom error classes
+class MessageServiceError extends Error {
+  constructor(message: string, public readonly originalError?: unknown) {
+    super(message)
+    this.name = 'MessageServiceError'
+  }
+}
+
+class NotFoundError extends MessageServiceError {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NotFoundError'
+  }
+}
+
+// Composable for API integration
+export function useMessageApi() {
+  const loading = ref(false)
+  const error = ref<Error | null>(null)
+
+  async function fetchMessages(params: GetMessagesParams): Promise<MessageOutputModal[]> {
+    loading.value = true
+    error.value = null
+
+    try {
+      return await MessageService.fetchMessages(params)
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw error.value
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchMessageDetail(id: string): Promise<MessageDetailViewResponseResponse> {
+    loading.value = true
+    error.value = null
+
+    try {
+      return await MessageService.fetchMessageDetail(id)
+    } catch (err) {
+      error.value = err instanceof Error ? err : new Error(String(err))
+      throw error.value
+    } finally {
+      loading.value = false
+    }
+  }
+
+  return {
+    loading: readonly(loading),
+    error: readonly(error),
+    fetchMessages,
+    fetchMessageDetail
+  }
+}
+
+// Advanced utility types
+type ExtractApiResponse<T> = T extends Promise<infer U> ? U : never
+type MessageApiResponse = ExtractApiResponse<ReturnType<typeof MessageService.fetchMessages>>
+
+// Type-safe configuration
+interface ApiConfig {
+  readonly baseUrl: string
+  readonly timeout: number
+  readonly retries: number
+}
+
+const apiConfig: ApiConfig = {
+  baseUrl: '/api',
+  timeout: 10000,
+  retries: 3
+}
+```
+</example>
+
+<example>
+```vue
+<!-- GOOD: SSR-aware component with client-only functionality -->
+<script setup lang="ts">
+// SSR-safe state using useState
+const counter = useState('counter', () => 0)
+
+// Client-only code in onMounted
+onMounted(() => {
+  // Safe to use browser APIs here
+  const savedValue = localStorage.getItem('counter')
+  if (savedValue) {
+    counter.value = parseInt(savedValue, 10)
+  }
+})
+
+// Watch with cleanup
+const stopWatch = watch(counter, (newValue) => {
+  // Only runs on client after hydration
+  if (import.meta.client) {
+    localStorage.setItem('counter', String(newValue))
+  }
+})
+
+onBeforeUnmount(() => {
+  stopWatch()
+})
+</script>
+
+<template>
+  <div>
+    <p>Counter: {{ counter }}</p>
+    <button @click="counter++">Increment</button>
+
+    <!-- Client-only component -->
+    <ClientOnly>
+      <ThirdPartyWidget />
+      <template #fallback>
+        <p>Loading widget...</p>
+      </template>
+    </ClientOnly>
+  </div>
+</template>
+```
+</example>
+
+<example type="invalid">
+```vue
+<!-- BAD: Poor Vue/Nuxt practices -->
+<template>
+  <div>User Profile</div>
+</template>
+
+<script>
+export default {
+  name: 'UserProfile',
+  // BAD: No TypeScript
+  // BAD: No Composition API
+  // BAD: No proper error handling
+  // BAD: No logging
+  // BAD: No lifecycle management
+  // BAD: No props validation
+  // BAD: No emits declaration
+
+  async mounted() {
+    // BAD: Fetching data in mounted instead of useFetch/useAsyncData
+    // BAD: No loading/error state handling
+    this.user = await fetch('/api/user').then(r => r.json())
+
+    // BAD: Using browser API without SSR check
+    localStorage.setItem('visited', 'true')
+  }
+}
+</script>
+```
+</example>
+
+## Critical Rules
+
+- **ALWAYS** use Composition API with `<script setup>` for new components
+- **IMPLEMENT** proper TypeScript types and interfaces
+- **VALIDATE** component props with TypeScript interfaces and withDefaults
+- **DECLARE** component emits with TypeScript interfaces
+- **USE** composables for shared logic and state management
+- **IMPLEMENT** proper error handling and logging
+- **USE** Pinia for state management (when explicitly requested) with TypeScript support
+- **WRITE** unit tests for all components and composables using Vitest
+- **USE** lazy loading for route components
+- **IMPLEMENT** proper logging using LoggingService
+- **FOLLOW** feature-based project structure
+- **USE** auto-imports for Vue composables and utilities (don't manually import what Nuxt auto-imports)
+- **PREFER** TypeScript-first approach for all component logic
+- **USE** modern Vue 3 features (Teleport, Suspense, v-memo)
+- **OPTIMIZE** reactivity with shallowRef() and markRaw() for performance
+- **IMPLEMENT** proper cleanup in lifecycle hooks (onBeforeUnmount)
+- **TYPE** template refs properly using useTemplateRef with generics
+- **USE** both Pinia composition API and options API store patterns appropriately
+- **INTEGRATE** VueUse composables for browser APIs and state persistence
+- **IMPLEMENT** type-safe state persistence with useSessionStorage/useLocalStorage
+- **USE** generated API types and clients from OpenAPI/Orval for type safety
+- **EXTRACT** component instance types using InstanceType utility type
+- **IMPLEMENT** advanced utility types for Vue-specific use cases
+- **HANDLE** SSR concerns: use `import.meta.client`/`import.meta.server` and `<ClientOnly>`
+- **PREFER** `useFetch`/`useAsyncData` over fetching data in `onMounted`
+- **AVOID** hydration mismatches by ensuring consistent server/client rendering
+- **USE** Nuxt layers for sharing code across projects
+- **LEVERAGE** file-based routing and route middleware for navigation and guards
+- **RUN** `nuxi typecheck` and `nuxi analyze` for validation and bundle analysis

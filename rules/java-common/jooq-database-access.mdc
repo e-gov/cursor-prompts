@@ -25,7 +25,7 @@ alwaysApply: true
   # Good: jOOQ Type-Safe DSL Query in a Service Method
   ```java
   // Assuming BOOK is the generated jOOQ table class
-  import static ee.smit.jooq.Tables.BOOK;
+  import static {base.package}.jooq.Tables.BOOK; // Use your generated jOOQ Tables class
 
   // ... inside a service method (retry/transaction/audit handled by framework/other rules) ...
   public List<BookResponse> findCheapBooks() {
@@ -90,7 +90,7 @@ alwaysApply: true
   // Assuming BOOK is the generated jOOQ table class
   // Assuming BookResponse is the target DTO
   // Assuming BookRecord is the jOOQ generated record class
-  import static ee.smit.jooq.Tables.BOOK;
+  import static {base.package}.jooq.Tables.BOOK; // Use your generated jOOQ Tables class
   import org.jooq.Condition;
   import org.jooq.impl.DSL;
   import java.math.BigDecimal;

@@ -1,0 +1,944 @@
+---
+description: TypeScript code style and standards for SPA applications
+globs: **/*.{ts,tsx}
+alwaysApply: true
+---
+# TypeScript Code Style and Standards
+
+## Context
+
+- When writing TypeScript code for Angular or Vue applications
+- When reviewing TypeScript code
+- When modifying existing TypeScript code
+- When implementing new features
+- When refactoring existing code
+- When working with modern SPA frameworks
+
+## Requirements
+
+### File Documentation
+
+Public API files and complex modules should be documented using the following format:
+
+```typescript
+/**
+ * Brief one-line description of the file/module.
+ * 
+ * More detailed description of the module functionality,
+ * including its purpose, key features, and usage examples.
+ * 
+ */
+```
+
+### Function Documentation
+
+All exported public functions and non-obvious internal functions should be documented:
+
+```typescript
+/**
+ * Brief description of what the function does.
+ * 
+ * More detailed description if necessary, including any
+ * important implementation details or usage notes.
+ * 
+ * @param paramName - Description of the parameter
+ * @returns Description of the return value
+ * @throws ErrorType Description of when/why this error is thrown
+ * @example
+ * ```typescript
+ * const result = functionName('param');
+ * ```
+ */
+```
+
+### Interface Documentation
+
+Document all public interfaces and complex internal interfaces:
+
+```typescript
+/**
+ * Brief description of the interface.
+ * 
+ * More detailed description of the interface purpose
+ * and usage patterns.
+ */
+interface InterfaceName {
+  /** Description of the property */
+  propertyName: string;
+  
+  /** Description of the method */
+  methodName(): void;
+}
+```
+
+### Code Organization
+
+1. **File Structure** (in order):
+   - File documentation
+   - Imports (organized and grouped)
+   - Type definitions
+   - Interfaces
+   - Classes
+   - Functions
+   - Constants
+   - Exports
+
+2. **Import Organization**:
+   - Node.js built-in modules
+   - Third-party libraries
+   - Project-specific imports
+   - No wildcard imports (`*`)
+
+### Naming Conventions
+
+1. **Interfaces**:
+   - PascalCase
+   - Nouns or noun phrases
+   - Clear and descriptive
+
+2. **Functions**:
+   - camelCase
+   - Verb or verb phrases
+   - Clear purpose indication
+
+3. **Variables**:
+   - camelCase
+   - Meaningful names
+   - No single-letter names (except for loops)
+
+4. **Constants**:
+   - UPPER_SNAKE_CASE
+   - Clear and descriptive
+
+5. **Types**:
+   - PascalCase
+   - Suffix with descriptive type (e.g., `UserConfig`, `ApiResponse`)
+
+### Best Practices
+
+1. **Code Structure**:
+   - One interface/class per file
+   - File name matches exported interface/class name
+   - Maximum file length: 400 lines
+   - Maximum function length: 30 lines
+   - Maximum class length: 300 lines
+
+2. **Error Handling**:
+   - Use specific error types
+   - Document all thrown errors
+   - Include error messages
+   - Implement proper cleanup
+
+3. **Logging**:
+   - Use appropriate logging levels
+   - Meaningful log messages
+   - Include context information
+
+4. **Testing**:
+   - Unit tests for all exported functions
+   - Integration tests for workflows
+   - Mock external dependencies
+
+5. **Type Safety**:
+   - Always use explicit types
+   - Avoid `any` type - prefer `unknown` for values of unknown type and narrow with type guards
+   - Use union types for multiple possibilities
+   - Use generic types when appropriate
+   - Use strict TypeScript configuration (`strict: true`)
+   - Enable all strict type checking options (see TypeScript Configuration section)
+   - Use `const` assertions for immutable data
+   - Prefer `readonly` arrays and objects
+   - Use branded types for type safety
+   - Implement proper type guards for `unknown` values
+
+6. **Framework-Specific Standards**:
+   - **Angular**: Use Angular CLI, follow Angular style guide, use OnPush change detection
+   - **Vue**: Use Composition API, TypeScript-first approach, proper prop validation
+   - **State Management**: Use Pinia (Vue) or NgRx (Angular) for complex state
+   - **Component Design**: Follow single responsibility principle, keep components small
+   - **Reactive Programming**: Use RxJS (Angular) or Vue reactivity system
+
+7. **Modern TypeScript Patterns**:
+   - Use template literal types for string manipulation
+   - Implement utility types (Partial, Pick, Omit, Record)
+   - Use conditional types for complex type logic
+   - Prefer `satisfies` operator over type assertions
+   - Use `as const` for literal type inference
+   - Implement proper error boundaries and error types
+
+8. **Advanced TypeScript Features**:
+   - Prefer `as const` objects with union literal types over enums for better tree-shaking and type inference
+   - Use enums only when runtime enum semantics are needed (e.g., reverse mapping, interop with external APIs)
+   - Implement branded types for type safety
+   - Use `in` operator for property existence checks
+   - Create custom utility types for specific use cases
+   - Use tree shaking for unused code removal
+   - Implement proper module organization with barrel files
+
+9. **Environment Configuration Types**:
+   - Type all environment variables with proper interfaces
+   - Use readonly properties for configuration objects
+   - Implement type-safe environment access patterns
+   - Validate environment configuration at startup
+
+10. **API Client Type Patterns**:
+    - Use consistent API response typing with generic interfaces
+    - Implement proper error type hierarchies for API responses
+    - Type API client configurations with readonly properties
+    - Use branded types for API identifiers and tokens
+
+11. **Enhanced Error Type System**:
+    - Create abstract error base classes with consistent structure
+    - Use Result types for functions that can fail
+    - Implement domain-specific error types extending base errors
+    - Type error boundaries and error handling consistently
+
+12. **Performance-Oriented Type Patterns**:
+    - Use const assertions for literal types and better tree-shaking
+    - Prefer type-only imports when importing only for types
+    - Implement conditional exports for optimal bundling
+    - Use deep readonly types for immutable configuration objects
+
+### Code Examples
+
+#### Valid Example: Good interface documentation
+
+```typescript
+/**
+ * Represents user authentication data.
+ * 
+ * This interface defines the structure for user authentication
+ * information including credentials and session data.
+ * 
+ */
+interface UserAuth {
+  /** User's unique identifier */
+  userId: string;
+  
+  /** User's email address */
+  email: string;
+  
+  /** Authentication token */
+  token: string;
+  
+  /** Token expiration timestamp */
+  expiresAt: Date;
+}
+```
+
+#### Invalid Example: Poor interface documentation (missing detail, no types)
+
+```typescript
+/** User auth data */
+interface UserAuth {
+  userId: any;
+  email: any;
+  token: any;
+}
+```
+
+#### Valid Example: Good function documentation
+
+```typescript
+/**
+ * Authenticates a user with the provided credentials.
+ * 
+ * This function validates the user credentials against the
+ * authentication service and returns user data if valid.
+ * 
+ * @param username - The user's login identifier
+ * @param password - The user's password
+ * @returns Promise containing user authentication data
+ * @throws AuthenticationError if credentials are invalid
+ * @throws NetworkError if service is unavailable
+ * @example
+ * ```typescript
+ * const user = await authenticateUser('john', 'password123');
+ * ```
+ */
+async function authenticateUser(
+  username: string, 
+  password: string
+): Promise<UserAuth> {
+  // Function implementation
+}
+```
+
+#### Invalid Example: Poor function documentation (no types, missing detail)
+
+```typescript
+/** Authenticates user */
+async function authenticateUser(u: any, p: any) {
+  // Function implementation
+}
+```
+
+#### Invalid Example: Incorrect function naming (violates camelCase)
+
+```typescript
+function Process_User_Data(userData: UserData): void {
+  // Function implementation
+}
+```
+
+#### Invalid Example: Incorrect constant naming (violates UPPER_SNAKE_CASE)
+
+```typescript
+const maxRetries = 3;
+```
+
+#### Invalid Example: Using `any` type (violates type safety)
+
+```typescript
+// Avoid using any type
+function processData(data: any): any {
+  return data.someProperty;
+}
+
+// Use explicit types instead
+interface DataType {
+  someProperty: string;
+}
+
+function processData(data: DataType): string {
+  return data.someProperty;
+}
+```
+
+#### Valid Example: Modern TypeScript Patterns
+
+```typescript
+// Template literal types
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
+type ApiEndpoint = `/api/v1/${string}`;
+type FullUrl = `https://api.example.com${ApiEndpoint}`;
+
+// Utility types
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+}
+
+type UserUpdate = Partial<Pick<User, 'name' | 'email'>>;
+type AdminUser = User & { role: 'admin' };
+
+// Branded types for type safety
+type UserId = string & { readonly brand: unique symbol };
+type Email = string & { readonly brand: unique symbol };
+
+// Type guards
+function isUser(obj: unknown): obj is User {
+  return typeof obj === 'object' && 
+         obj !== null && 
+         'id' in obj && 
+         'name' in obj;
+}
+
+// Const assertions
+const API_ENDPOINTS = {
+  users: '/api/users',
+  posts: '/api/posts'
+} as const;
+
+// Satisfies operator
+const config = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000
+} satisfies Record<string, string | number>;
+
+// Prefer const objects with union literal types (better tree-shaking)
+const UserRole = {
+  ADMIN: 'admin',
+  USER: 'user',
+  MODERATOR: 'moderator'
+} as const;
+
+type UserRole = typeof UserRole[keyof typeof UserRole]; // 'admin' | 'user' | 'moderator'
+
+// Use enums only when runtime enum semantics are needed
+enum HttpStatus {
+  OK = 200,
+  NOT_FOUND = 404,
+  SERVER_ERROR = 500
+}
+
+// Custom utility types
+type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};
+
+// Barrel file exports
+export * from './user.types';
+export * from './api.types';
+export * from './utils';
+
+// Environment configuration typing
+interface EnvironmentConfig {
+  readonly apiUrl: string;
+  readonly featureFlags: Record<string, boolean>;
+  readonly version: string;
+  readonly logLevel: 'debug' | 'info' | 'warn' | 'error';
+}
+
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv extends EnvironmentConfig {}
+  }
+}
+
+// API client type patterns
+interface ApiResponse<T> {
+  readonly data: T;
+  readonly status: number;
+  readonly message?: string;
+}
+
+type ApiError = {
+  readonly code: string;
+  readonly message: string;
+  readonly details?: Record<string, unknown>;
+};
+
+interface ApiClientConfig {
+  readonly baseUrl: string;
+  readonly timeout: number;
+  readonly retries: number;
+  readonly headers: Record<string, string>;
+}
+
+// Enhanced error type system
+abstract class AppError extends Error {
+  abstract readonly code: string;
+  abstract readonly statusCode: number;
+  
+  constructor(message: string, public readonly context?: Record<string, unknown>) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+class ValidationError extends AppError {
+  readonly code = 'VALIDATION_ERROR';
+  readonly statusCode = 400;
+  
+  constructor(public readonly field: string, message: string) {
+    super(message);
+  }
+}
+
+class NotFoundError extends AppError {
+  readonly code = 'NOT_FOUND';
+  readonly statusCode = 404;
+}
+
+// Result type for error handling
+type Result<T, E = AppError> = 
+  | { readonly success: true; readonly data: T }
+  | { readonly success: false; readonly error: E };
+
+// Performance-oriented patterns
+// Const assertions for better tree-shaking
+const API_ENDPOINTS = {
+  users: '/api/users',
+  posts: '/api/posts',
+  auth: '/api/auth'
+} as const;
+
+// Type-only imports
+import type { UserProfile, ApiResponse } from './types';
+import { createUser } from './user.service';
+
+// Deep readonly utility
+type DeepReadonly<T> = {
+  readonly [P in keyof T]: T[P] extends object 
+    ? DeepReadonly<T[P]> 
+    : T[P];
+};
+
+// Conditional exports for tree-shaking
+export type { UserProfile } from './user.types';
+export type { ApiError, ValidationError } from './errors';
+export { UserService } from './user.service';
+
+// Generated API client integration
+interface GeneratedApiClient {
+  getUsers(): Promise<ApiResponse<User[]>>;
+  getUserById(id: string): Promise<ApiResponse<User>>;
+  createUser(data: CreateUserRequest): Promise<ApiResponse<User>>;
+}
+
+// Service layer wrapper for generated clients
+export class UserApiService {
+  constructor(private readonly client: GeneratedApiClient) {}
+
+  async fetchUsers(): Promise<Result<User[], ApiError>> {
+    try {
+      const response = await this.client.getUsers();
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: new ValidationError('users', 'Failed to fetch users') 
+      };
+    }
+  }
+
+  async fetchUserById(id: string): Promise<Result<User, ApiError>> {
+    if (!id) {
+      return { 
+        success: false, 
+        error: new ValidationError('id', 'User ID is required') 
+      };
+    }
+
+    try {
+      const response = await this.client.getUserById(id);
+      return { success: true, data: response.data };
+    } catch (error) {
+      if (error.status === 404) {
+        return { 
+          success: false, 
+          error: new NotFoundError(`User with ID ${id} not found`) 
+        };
+      }
+      return { 
+        success: false, 
+        error: new ValidationError('user', 'Failed to fetch user') 
+      };
+    }
+  }
+}
+
+// Advanced utility type patterns
+// Extract properties from complex types
+type ExtractType<T, K extends keyof T> = T[K];
+type ExtractMethods<T> = Pick<T, {
+  [K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
+}[keyof T]>;
+
+// Nested key access pattern
+type DotPrefix<T extends string> = T extends '' ? '' : `.${T}`;
+type DotNestedKeys<T> = (
+  T extends object
+    ? {
+        [K in Exclude<keyof T, symbol>]: `${K}${DotPrefix<DotNestedKeys<T[K]>>}`
+      }[Exclude<keyof T, symbol>]
+    : ''
+) extends infer D
+  ? Extract<D, string>
+  : never;
+
+// Usage: DotNestedKeys<{ user: { profile: { name: string } } }> 
+// Result: "user" | "user.profile" | "user.profile.name"
+
+// InstanceType utility for class extraction
+class DatabaseConnection {
+  connect(): Promise<void> { return Promise.resolve(); }
+  query<T>(sql: string): Promise<T[]> { return Promise.resolve([]); }
+}
+
+type ConnectionType = InstanceType<typeof DatabaseConnection>;
+type ConnectionMethods = ExtractMethods<ConnectionType>;
+
+// Domain-specific utility types
+type ApiEndpoints<T extends Record<string, any>> = {
+  [K in keyof T]: T[K] extends (...args: any[]) => Promise<infer R>
+    ? R extends ApiResponse<infer U>
+      ? U
+      : never
+    : never;
+};
+
+// Extract return types from API client
+type UserApiTypes = ApiEndpoints<GeneratedApiClient>;
+// Result: { getUsers: User[]; getUserById: User; createUser: User }
+
+// Recursive type for form validation
+type ValidationRules<T> = {
+  [K in keyof T]?: T[K] extends object
+    ? ValidationRules<T[K]>
+    : (value: T[K]) => boolean | string;
+};
+
+// Configuration type builder
+type ConfigBuilder<T> = {
+  readonly [K in keyof T]: T[K] extends object
+    ? ConfigBuilder<T[K]>
+    : T[K];
+} & {
+  build(): DeepReadonly<T>;
+  merge(other: Partial<T>): ConfigBuilder<T>;
+};
+```
+
+#### Valid Example: Angular Component with TypeScript
+
+```typescript
+/**
+ * User profile component for displaying user information.
+ * 
+ * Uses OnPush change detection for better performance.
+ */
+@Component({
+  selector: 'app-user-profile',
+  templateUrl: './user-profile.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class UserProfileComponent implements OnInit {
+  @Input() userId!: string;
+  @Output() userUpdated = new EventEmitter<User>();
+  
+  user$ = new BehaviorSubject<User | null>(null);
+  
+  constructor(private userService: UserService) {}
+  
+  ngOnInit(): void {
+    this.loadUser();
+  }
+  
+  private loadUser(): void {
+    this.userService.getUser(this.userId).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(user => this.user$.next(user));
+  }
+}
+```
+
+#### Valid Example: Vue Component with Composition API
+
+```typescript
+/**
+ * User profile component using Vue 3 Composition API.
+ * 
+ * Implements proper TypeScript typing and reactive state management.
+ */
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export default defineComponent({
+  name: 'UserProfile',
+  props: {
+    userId: {
+      type: String,
+      required: true,
+      validator: (value: string) => value.length > 0
+    }
+  },
+  emits: ['user-updated'],
+  setup(props, { emit }) {
+    const user = ref<User | null>(null);
+    const loading = ref(false);
+    
+    const loadUser = async (): Promise<void> => {
+      loading.value = true;
+      try {
+        user.value = await userService.getUser(props.userId);
+      } catch (error) {
+        console.error('Failed to load user:', error);
+      } finally {
+        loading.value = false;
+      }
+    };
+    
+    onMounted(() => {
+      loadUser();
+    });
+    
+    return {
+      user: readonly(user),
+      loading: readonly(loading),
+      loadUser
+    };
+  }
+});
+```
+
+#### Valid Example: Framework-Agnostic Service with Enhanced Types
+
+```typescript
+/**
+ * Framework-agnostic service implementation with proper TypeScript patterns.
+ * 
+ * Demonstrates API client typing, error handling, and result patterns
+ * that work with any frontend framework.
+ */
+
+// Component/Service state interface
+interface UserServiceState {
+  readonly users: User[];
+  readonly loading: boolean;
+  readonly error: string | null;
+  readonly lastUpdated: Date | null;
+}
+
+// Type-safe service implementation
+export class UserService {
+  private readonly baseUrl: string;
+  private readonly config: ApiClientConfig;
+
+  constructor(config: ApiClientConfig) {
+    this.config = config;
+    this.baseUrl = config.baseUrl;
+  }
+
+  async getUsers(): Promise<Result<User[], ApiError>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/users`, {
+        headers: this.config.headers,
+        signal: AbortSignal.timeout(this.config.timeout)
+      });
+
+      if (!response.ok) {
+        return { 
+          success: false, 
+          error: new ValidationError('users', `HTTP ${response.status}: ${response.statusText}`) 
+        };
+      }
+
+      const apiResponse: ApiResponse<User[]> = await response.json();
+      return { success: true, data: apiResponse.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: new ValidationError('users', 'Failed to fetch users') 
+      };
+    }
+  }
+
+  async getUserById(id: string): Promise<Result<User, ApiError>> {
+    if (!id) {
+      return { 
+        success: false, 
+        error: new ValidationError('id', 'User ID is required') 
+      };
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/users/${id}`, {
+        headers: this.config.headers,
+        signal: AbortSignal.timeout(this.config.timeout)
+      });
+
+      if (response.status === 404) {
+        return { 
+          success: false, 
+          error: new NotFoundError(`User with ID ${id} not found`) 
+        };
+      }
+
+      if (!response.ok) {
+        return { 
+          success: false, 
+          error: new ValidationError('users', `HTTP ${response.status}: ${response.statusText}`) 
+        };
+      }
+
+      const apiResponse: ApiResponse<User> = await response.json();
+      return { success: true, data: apiResponse.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: new NotFoundError(`User with ID ${id} not found`) 
+      };
+    }
+  }
+
+  async createUser(userData: Omit<User, 'id'>): Promise<Result<User, ApiError>> {
+    if (!userData.name || !userData.email) {
+      return { 
+        success: false, 
+        error: new ValidationError('user', 'Name and email are required') 
+      };
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/users`, {
+        method: 'POST',
+        headers: {
+          ...this.config.headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData),
+        signal: AbortSignal.timeout(this.config.timeout)
+      });
+
+      if (!response.ok) {
+        return { 
+          success: false, 
+          error: new ValidationError('user', `Failed to create user: ${response.statusText}`) 
+        };
+      }
+
+      const apiResponse: ApiResponse<User> = await response.json();
+      return { success: true, data: apiResponse.data };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: new ValidationError('user', 'Failed to create user') 
+      };
+    }
+  }
+}
+
+// Framework-agnostic state management
+export class UserStateManager {
+  private state: UserServiceState = {
+    users: [],
+    loading: false,
+    error: null,
+    lastUpdated: null
+  };
+
+  private listeners: ((state: UserServiceState) => void)[] = [];
+
+  constructor(private userService: UserService) {}
+
+  getState(): Readonly<UserServiceState> {
+    return { ...this.state };
+  }
+
+  subscribe(listener: (state: UserServiceState) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      const index = this.listeners.indexOf(listener);
+      if (index > -1) {
+        this.listeners.splice(index, 1);
+      }
+    };
+  }
+
+  private setState(newState: Partial<UserServiceState>): void {
+    this.state = { ...this.state, ...newState };
+    this.listeners.forEach(listener => listener(this.state));
+  }
+
+  async loadUsers(): Promise<void> {
+    this.setState({ loading: true, error: null });
+
+    const result = await this.userService.getUsers();
+    
+    if (result.success) {
+      this.setState({ 
+        users: result.data, 
+        loading: false,
+        lastUpdated: new Date()
+      });
+    } else {
+      this.setState({ 
+        loading: false, 
+        error: result.error.message 
+      });
+    }
+  }
+}
+```
+
+### TypeScript Configuration
+
+Use strict TypeScript configuration with recommended compiler options:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+### TypeScript Tooling
+
+1. **ESLint Configuration:**
+   - Use `@typescript-eslint/eslint-plugin` and `@typescript-eslint/parser`
+   - Enable recommended rules: `@typescript-eslint/recommended`
+   - Enable strict rules: `@typescript-eslint/recommended-requiring-type-checking`
+   - Configure import ordering rules
+   - Enable `no-floating-promises` for async safety
+
+2. **Prettier Integration:**
+   - Use Prettier for consistent code formatting
+   - Configure ESLint to work with Prettier
+   - Use `.prettierrc` for project-specific formatting rules
+
+3. **Type Checking:**
+   - Run `tsc --noEmit` in CI/CD pipelines
+   - Use IDE TypeScript language service for real-time checking
+   - Enable strict mode in `tsconfig.json`
+
+### Using `unknown` vs `any`
+
+Prefer `unknown` over `any` for values of unknown type and narrow with type guards:
+
+```typescript
+// BAD: Using any loses type safety
+function processData(data: any): void {
+  console.log(data.property); // No type checking
+}
+
+// GOOD: Using unknown requires type narrowing
+function processData(data: unknown): void {
+  if (typeof data === 'object' && data !== null && 'property' in data) {
+    console.log((data as { property: string }).property); // Type-safe after narrowing
+  }
+}
+
+// BETTER: Use type guards for cleaner code
+function isUserData(data: unknown): data is { name: string; email: string } {
+  return typeof data === 'object' &&
+         data !== null &&
+         'name' in data &&
+         'email' in data &&
+         typeof (data as { name: unknown }).name === 'string' &&
+         typeof (data as { email: unknown }).email === 'string';
+}
+
+function processUserData(data: unknown): void {
+  if (isUserData(data)) {
+    // TypeScript knows data is { name: string; email: string }
+    console.log(data.name, data.email);
+  }
+}
+```
+
+## Critical Rules
+
+1. All exported public APIs should be documented with JSDoc
+2. All public functions and non-obvious internal functions should have proper documentation
+3. Keep documentation up to date with usage examples
+4. Follow SOLID principles and proper error handling
+5. Use feature-based organization with barrel exports
+6. No compilation errors, ESLint violations, or SonarQube issues
+7. Maintain test coverage above 80%
+8. Write tests before fixing bugs and include edge cases
+9. Use strict TypeScript configuration and explicit types
+10. Avoid `any` type - prefer `unknown` and implement proper type guards
+11. Use Result types for error handling and readonly configurations
+12. Type environment variables and use branded types where appropriate
+13. Use framework-specific patterns (Angular OnPush, Vue Composition API)
+14. Centralize state management with immutable updates
+15. Use utility types, template literals, and conditional types
+16. Prefer `satisfies` operator, `as const`, and type-only imports
+17. Prefer `as const` objects with union literal types over enums
+18. Use OpenAPI/Orval generated types for consistent API contracts
+19. Wrap generated API clients with type-safe service layer abstractions
+20. Configure ESLint and Prettier for consistent code quality

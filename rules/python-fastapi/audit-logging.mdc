@@ -1,0 +1,75 @@
+---
+description: Security and compliance audit logging via AuditLogger
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# Audit Logging (Python / FastAPI)
+
+## Context
+
+- Apply when implementing **significant business operations** in services (for example `src/<package>/service/**/*.py`) that require a tamper-evident, reviewable trail.
+- **Audit logs are not application debug logs.** Use **`structlog`** per **`mdc:rules/python-fastapi/application-logging.mdc`** for operations; use **`AuditLogger`** only for audit records.
+- Correlation data (`request_id`, `client_ip`, `user_id`) comes from **structlog contextvars** (middleware + auth); wire these in your project’s audit module (for example `<package>.core.audit`).
+- **Security audit expectations** (which events to record, sensitive data, authentication logging): **`mdc:rules/common/security.mdc`**. **Searchable / distinct audit entries** (conceptual): **`mdc:rules/common/component-technical-standards.mdc`**. This rule defines the **Python API** (`AuditLogger`) only.
+
+## Standard payload shape
+
+`AuditLogger` builds a structured record (serialized to the audit logger) with fields including:
+
+- `correlationId` — from context `request_id`
+- `time` — UTC timestamp
+- `application` — name and environment
+- `activity` — `action` (for example `BOOK_CREATED`) and `extraInfo`
+- `actor` — user identifier
+- `client` — client id, source, optional IP-related metadata
+- `result` — success code and message
+
+Developers **do not** hand-craft this JSON; they call **`AuditLogger` static methods**.
+
+## Requirements
+
+1. **Use `AuditLogger` only** — import from your project’s audit module. Do not emit audit lines with `logger.info("AUDIT: ...")` or manual JSON blobs.
+2. **High-value events only** — resource lifecycle (create/update/delete), regulated reads, exports, permission changes, authentication outcomes, etc. Skip noisy internal steps.
+3. **Log after success** — call `AuditLogger` **after** the operation has succeeded (see **`mdc:rules/common/security.mdc`** for *why* audit trails matter).
+4. **No sensitive payloads in `extraInfo`** — same redaction rules as **`mdc:rules/common/security.mdc`**; audit payloads are structured JSON-like dicts via your audit module.
+5. **Authentication / authorization / user-initiated activities** — coverage expectations are defined in **`mdc:rules/common/security.mdc`**; implement with new `AuditLogger` methods or extended actions only after aligning with that policy (ask before broad schema changes).
+
+## Available helpers (extend your `audit` module when needed)
+
+Current static methods on `AuditLogger` include:
+
+- `log_create(resource, resource_id, data, user=...)`
+- `log_update(resource, resource_id, old_data, new_data, user=...)`
+- `log_delete(resource, resource_id, user=...)`
+- `log_read(resource, resource_id, user=...)`
+
+Consult your project’s audit module for the authoritative list and parameter meanings.
+
+## Examples
+
+```python
+# GOOD: after persist succeeds
+await self.db.flush()
+await self.db.refresh(book)
+AuditLogger.log_create("Book", book.id, book_data.model_dump())
+```
+
+```python
+# BAD: audit before commit — operation may still fail
+AuditLogger.log_delete("Book", book_id)
+await self.db.delete(book)
+await self.db.commit()
+```
+
+```python
+# BAD: standard logger masquerading as audit
+logger.info("audit: user deleted book", book_id=book_id)
+```
+
+## Critical rules
+
+- **ALWAYS** use `AuditLogger` for audit records; **NEVER** use `structlog` alone for compliance audit trails.
+- **ALWAYS** emit success audits **after** the operation succeeds.
+- **Sensitive `extraInfo` and security-event policy:** **`mdc:rules/common/security.mdc`**.
+- **DO NOT** put stack traces or low-level exceptions in the audit stream — use **`mdc:rules/python-fastapi/application-logging.mdc`** for those.

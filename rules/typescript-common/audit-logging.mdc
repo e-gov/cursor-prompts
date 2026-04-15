@@ -1,0 +1,153 @@
+---
+description: TypeScript SPA audit logging standards for business and security events
+globs: **/*.{ts,tsx}
+alwaysApply: true
+---
+
+
+# TypeScript Audit Logging Standards (SPA Applications)
+
+## Context
+
+- Apply when implementing business events, user actions, and security compliance events in Angular and Vue SPA applications
+- This application uses a dedicated `AuditLogger` utility to ensure consistent, structured logging of important events for security and compliance
+- Audit logs are separate from regular application/debug logs (use `typescript-common/application-logging.mdc` for technical logging)
+- Frontend audit logging sends structured data to backend endpoints - backend handles compliance, retention, security infrastructure
+
+## Standard Log Structure
+
+Using the `AuditLogger` utility ensures logs are generated in the following standard JSON format:
+
+```typescript
+interface AuditLogEntry {
+  correlationId: string;
+  timestamp: string;           // ISO 8601 format
+  application: {
+    name: string;
+    version?: string;
+    environment?: string;
+  };
+  activity: {
+    action: string;            // Business event type
+    objectId?: string;         // Primary business object ID
+    details?: Record<string, any>; // Action-specific details
+  };
+  actor: {
+    userId?: string;           // User identifier
+    sessionId?: string;        // Session identifier
+    userAgent?: string;        // Browser/device information
+    clientIp?: string;         // Client IP address
+  };
+  client: {
+    id: string;               // Client application identifier
+    source: 'BROWSER' | 'MOBILE' | 'API';
+  };
+  result: {
+    code: 'SUCCESS' | 'FAILURE' | 'VALIDATION_ERROR';
+    message: string;
+  };
+}
+```
+
+## Requirements
+
+- **Use `AuditLogger`:** ALL audit log entries MUST be generated using the `AuditLogger` utility class.
+- **Log Significant Business Events:** Only log high-level, meaningful business operations (e.g., resource creation, update, deletion, key access), not low-level implementation details.
+- **Log After Success:** Audit log entries for successful operations MUST be created *after* the core business logic has completed successfully.
+- **Do Not Log Sensitive Data:** Avoid including sensitive personal information in audit log messages or `details` fields.
+- **Log All Authentication Attempts:** ALL authentication attempts MUST be logged regardless of outcome (login, logout, failed authentication, session timeout).
+- **Log All User-Initiated Activities:** ALL user-initiated activities MUST be logged (CRUD operations, searches, file uploads, exports).
+
+## Key `AuditLogger` Methods
+
+```typescript
+// Authentication events
+AuditLogger.logLoginAttempt(userId: string, success: boolean, details?: Record<string, any>);
+AuditLogger.logLogout(userId: string);
+AuditLogger.logSessionTimeout(userId: string);
+
+// Data access events
+AuditLogger.logDataAccess(objectType: string, objectId: string, accessType: 'READ' | 'WRITE' | 'DELETE');
+AuditLogger.logDataExport(userId: string, exportType: string, recordCount: number);
+
+// Business events
+AuditLogger.logBusinessEvent(eventType: string, objectId: string, details?: Record<string, any>);
+AuditLogger.logBusinessEventFailure(eventType: string, objectId: string, errorDetails: Record<string, any>);
+```
+
+## Examples
+
+<example>
+```typescript
+// GOOD: Proper audit logging in Angular service
+@Injectable({
+  providedIn: 'root'
+})
+export class UserService {
+  constructor(
+    private http: HttpClient,
+    private auditLogger: AuditLogger
+  ) {}
+
+  updateUserProfile(userId: string, profileData: UserProfile): Observable<UserProfile> {
+    return this.http.put<UserProfile>(`/api/users/${userId}`, profileData).pipe(
+      tap({
+        next: (result) => {
+          this.auditLogger.logBusinessEvent(
+            'USER_PROFILE_UPDATED',
+            userId,
+            {
+              updatedFields: Object.keys(profileData),
+              profileVersion: result.version
+            }
+          );
+        },
+        error: (error) => {
+          this.auditLogger.logBusinessEventFailure(
+            'USER_PROFILE_UPDATE_FAILED',
+            userId,
+            {
+              errorCode: error.status,
+              errorMessage: error.message
+            }
+          );
+        }
+      })
+    );
+  }
+}
+```
+</example>
+
+<example type="invalid">
+```typescript
+// BAD: Missing audit logging
+@Injectable({
+  providedIn: 'root'
+})
+export class UserService {
+  constructor(private http: HttpClient) {}
+
+  updateUserProfile(userId: string, profileData: UserProfile): Observable<UserProfile> {
+    // BAD: No audit logging for important business event
+    return this.http.put<UserProfile>(`/api/users/${userId}`, profileData);
+  }
+}
+```
+</example>
+
+## Critical Rules
+
+- **ALWAYS** use the `AuditLogger` utility for creating audit log entries
+- **NEVER** create audit logs manually or use standard console logging for audit purposes
+- **SEND** all audit logs to backend endpoints for compliance and security handling
+- **ALWAYS** log authentication and authorization events (login, logout, session timeout)
+- **ALWAYS** log user-initiated business activities (CRUD operations, exports, imports)
+- **ALWAYS** log data access events (read, write, delete operations)
+- **ALWAYS** log business events with financial or legal implications
+- **NEVER** log sensitive personal data unless explicitly required and handled according to security policies
+- **DO NOT** log low-level technical details or exceptions in audit logs (use application logging for these)
+- **USE** appropriate audit event types and result codes
+- **INCLUDE** proper contextual information (userId, sessionId, objectId)
+- **LOG** both successful and failed operations
+- **FALLBACK** to console only if backend is unavailable

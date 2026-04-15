@@ -1,0 +1,74 @@
+---
+description: SQLAlchemy 2.0 async query patterns, safety, and performance
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# SQLAlchemy 2.0 Async Data Access
+
+## Context
+
+- Applies to database access in services and helpers using **`AsyncSession`** (see your project’s database module and `get_db` / session dependency).
+- **SQL injection, parameterized access, least privilege DB users:** **`mdc:rules/common/security.mdc`** (Input Validation — ORMs/parameterization). This rule is the **SQLAlchemy 2.0 async** expression of those requirements in this repo.
+- **Migrations vs runtime:** schema changes via Alembic as separate deploy steps — **`mdc:rules/common/component-technical-standards.mdc`** (Database & Data Management).
+
+## Core style (SQLAlchemy 2.0)
+
+- Use **`select()`** with **`await session.execute(...)`**, then **`scalar_one()`**, **`scalar_one_or_none()`**, **`scalars().all()`**, or **`await session.scalar(select(...))`** as appropriate.
+- Use **`session.get(Model, pk)`** for primary-key lookups when you want identity-map behavior.
+- **Do not** use legacy **`Session.query()`** on async sessions.
+- Prefer **ORM entities and `Column` expressions** in `where` / `order_by`; build dynamic filters by composing **`sqlalchemy.and_` / `or_`** and **`Condition`** objects — not by concatenating SQL.
+
+## Parameter binding and dynamic SQL
+
+- **Never** concatenate raw SQL with user-controlled strings — see **`mdc:rules/common/security.mdc`**. Use Core/ORM expressions so values are bound as parameters.
+- For **LIKE / ILIKE** with untrusted fragments, bind literals safely, for example:
+  - `column.ilike(func.concat("%", literal(user_fragment), "%"))`  
+  (pattern often lives in a small helper such as `_author_filter` on a service module).
+- For **dynamic ORDER BY**, use an **allowlist** of column attributes (like `SORTABLE_FIELDS` + `getattr(Model, field)`), not raw strings from the client.
+
+## Reads and shape of queries
+
+- **Pagination:** Prefer **`limit` / `offset`** (or keyset pagination for very large tables). Run a **separate `count()`** query when the API needs total hits, as in paged list endpoints — avoid loading the full table to count rows.
+- **Counts:** `select(func.count()).select_from(Model).where(...)` (or `func.count(Model.id)`) rather than `len((await session.scalars(select(Model))).all())`.
+- **Columns:** Use `select(Model.col1, Model.col2)` when you intentionally need a narrow projection; map rows explicitly.
+- **N+1:** If you add **relationships**, load them in the same round trip with **`selectinload()`** / **`joinedload()`** on the outer `select()`, or use a single statement with joins — do not access unloaded collections in a loop without an eager-load strategy.
+- **Large result sets:** Never load unbounded **`all()`** for user-facing endpoints without **`limit`**. For batch jobs that scan many rows, use **chunked queries** (keyset/`limit` loops) or SQLAlchemy **streaming** APIs supported by your installed version, and keep transactions short.
+
+## Writes and session lifecycle
+
+- **Inserts:** `session.add(instance)` then **`await session.flush()`** when you need generated keys before commit; rely on the request-scoped session’s **commit** from `get_db` unless you open a nested transaction intentionally.
+- **Updates:** Load or `get`, mutate attributes, then **`flush`**; avoid detached-instance pitfalls after commit when using `expire_on_commit=False` (default here).
+- **Deletes:** `await session.delete(obj)` (or bulk delete APIs when justified and understood).
+- **Concurrency:** Use **`SELECT … FOR UPDATE`** only when you have a clear locking story (`session.execute(select(...).with_for_update())`); document why.
+
+## Performance and clarity
+
+- Add **indexes** (via Alembic migrations) for filters and sort columns that appear in hot paths.
+- Keep **hot queries readable**: extract **`where` clauses** into named helpers (like `_author_filter`) when reused.
+- Wrap service methods that hit the DB with **`@db_retry`** (or your project’s equivalent) where transient connection errors are expected.
+
+## Critical rules
+
+- **ALWAYS** use the **async** session and **asyncpg** URL for request-path code.
+- **NEVER** use string-built SQL for routine CRUD/search — ORM/Core DSL only (**`mdc:rules/common/security.mdc`**).
+- **NEVER** interpolate user input into **LIKE** patterns via f-strings; use **`literal()`** / **`bindparam()`** (see examples above).
+- **PREFER** one round trip over **N+1** lazy loads when returning collections with relations.
+
+## Example
+
+```python
+from sqlalchemy import func, literal, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.book import Book  # replace `app` with your package name
+
+
+def title_starts_with(prefix: str):
+    return Book.title.ilike(func.concat(literal(prefix), "%"))
+
+
+async def count_by_author(db: AsyncSession, author: str) -> int:
+    q = select(func.count()).select_from(Book).where(title_starts_with(author))
+    return (await db.execute(q)).scalar_one()
+```

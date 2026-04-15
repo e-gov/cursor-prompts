@@ -1,0 +1,134 @@
+---
+description: FastAPI project stack — Python norms, contract-first, DI, and links to common + python-fastapi rules
+alwaysApply: true
+---
+
+# FastAPI-Specific Standards
+
+## Rule stack (use in this order for new work)
+
+1. **`mdc:rules/common/security.mdc`**, **`mdc:rules/common/integration-standards.mdc`**, **`mdc:rules/common/component-technical-standards.mdc`**, **`mdc:rules/common/agent-memory.mdc`** — policy, integration shape, component constraints, project memory.
+2. **This file** — FastAPI/Pydantic layout, contract generation, errors, lifecycle.
+3. **`mdc:rules/python-fastapi/python-documentation-standards.mdc`** — lean docstrings (only non-obvious behavior); deslop-aligned defaults.
+4. **`mdc:rules/python-fastapi/sqlalchemy-data-access.mdc`**, **`mdc:rules/python-fastapi/application-logging.mdc`**, **`mdc:rules/python-fastapi/audit-logging.mdc`** — DB queries, `structlog`, `AuditLogger`.
+5. **`AGENTS.md`** — commands, triggers, repo layout.
+
+## Scope
+
+- This rule applies to FastAPI backend work in repositories that adopt these conventions.
+- Keep guidance practical, concise, and production-oriented.
+- Application logging, audit logging, and SQLAlchemy access: **`mdc:rules/python-fastapi/application-logging.mdc`**, **`mdc:rules/python-fastapi/audit-logging.mdc`**, **`mdc:rules/python-fastapi/sqlalchemy-data-access.mdc`**.
+
+## Common rules (do not contradict; language-agnostic policy lives here)
+
+- **`mdc:rules/common/security.mdc`** — input validation, auth/session/token rules, error messages, security logging expectations, dependency hygiene.
+- **`mdc:rules/common/integration-standards.mdc`** — REST resource design, HTTP methods/status codes, RFC 7807 errors, OpenAPI contract-first, pagination at the API, correlation/trace headers for integrations.
+- **`mdc:rules/common/component-technical-standards.mdc`** — UTF-8, layered architecture, Alembic migrations (not on every startup), stateless service, env-based config, integration tests, JSON logs with correlation (conceptually), graceful shutdown / long-running job patterns.
+- **`mdc:rules/common/agent-memory.mdc`** — read/update `docs/agent-memory.md`.
+
+This file and `python-fastapi/*` add **only** Python/FastAPI/SQLAlchemy/structlog specifics; repeat global policy here only where it helps the agent map it to the service codebase.
+
+## Python code standards (PEP 8 + project norms)
+
+- **Types:** Use type hints on public functions and non-trivial internals; prefer modern syntax (`list[str]`, `X | None`). Run `mypy` on `src/` when changing contracts.
+- **Imports:** Order: standard library, third party, first party (your application package under `src/`). No wildcard imports (`from x import *`).
+- **Naming:** `snake_case` for functions, variables, and modules; `PascalCase` for classes; `UPPER_SNAKE_CASE` for module-level constants.
+- **Docstrings:** Follow **`mdc:rules/python-fastapi/python-documentation-standards.mdc`** — default omit; add only when types/names are insufficient; no `Author:` / `Version:` / `Since:` metadata or signature paraphrase.
+- **Structure:** One logical module per file; keep functions focused. Prefer composition over deep inheritance.
+- **Exceptions:** Raise specific project or built-in exceptions; avoid bare `except:`.
+- **Tests:** Use `pytest` and `pytest-asyncio`; mock external systems. Target high coverage for new business logic (see `pyproject.toml` / CI thresholds).
+- **Modern Python (3.12+):** Use `match` / pattern matching when it clarifies branching; prefer `dataclasses` or Pydantic models for structured data over loose dicts where appropriate.
+
+## Official references (keep current with upstream)
+
+- Lifespan (startup/shutdown): [FastAPI Lifespan Events](https://fastapi.tiangolo.com/advanced/events/) — prefer `lifespan` over deprecated `@app.on_event`.
+- Dependency injection: [FastAPI Dependencies](https://fastapi.tiangolo.com/tutorial/dependencies/) — prefer `typing.Annotated` + shared type aliases (FastAPI ≥ 0.95.1).
+- Concurrency model: [FastAPI Async](https://fastapi.tiangolo.com/async/) — avoid blocking the event loop in `async def` routes and dependencies.
+
+## Key Principles
+
+- Write concise, technical solutions with accurate Python examples.
+- Prefer functional, declarative code; avoid classes where practical.
+- Use iteration and modularization to reduce duplication.
+- Use descriptive variable names with auxiliary verbs (for example, `is_active`, `has_permission`, `can_read`).
+- Keep directories and filenames lowercase with underscores (for example, `routers/user_routes.py`).
+- Favor named exports for routes and utility functions.
+- Use Receive an Object, Return an Object (RORO): request/command objects in, response object out.
+
+## Python/FastAPI Conventions
+
+- **Configuration:** use a **`get_settings()`** (or equivalent) factory from your app’s settings module (pydantic-settings); do not use a module-level settings singleton (**`mdc:rules/common/component-technical-standards.mdc`** — env-based config).
+- Use `def` for pure/CPU-bound operations and `async def` for I/O-bound or external calls.
+- Use type hints on every function signature.
+- Prefer Pydantic models over raw dictionaries for validation.
+- Declare reusable dependencies with `Annotated[..., Depends(...)]` aliases (for example `DbSession` in `api/dependencies.py`) instead of repeating `Depends()` on every route.
+- Use a consistent file structure: exported router(s), sub-routes, utilities, static helpers, models/schemas.
+- Keep route handlers thin and declarative with explicit `response_model` / return annotations.
+- Prefer early returns and guard clauses:
+  - Validate edge cases at the top.
+  - Keep the happy path last.
+  - Avoid unnecessary `else` after early `return`.
+- Keep conditionals small; prefer one-line branches for trivial statements.
+- Minimize deep nesting.
+
+## Contract-First API and Generation
+
+- OpenAPI as contract, versioning, and Problem-shaped errors: see **`mdc:rules/common/integration-standards.mdc`**. Contract path is project-specific (often **`src/resources/swagger/openapi.yml`**).
+- After contract changes, run `./scripts/generate-models.sh`.
+- Update your application’s Pydantic schema module (for example `src/<package>/models/schemas.py`) for application-specific schema adaptations.
+- Do not edit `src/generated/openapi/models.py` directly.
+- For DB mapping refresh, run `./scripts/generate-db-models.sh` intentionally when model/schema alignment is required.
+- Do not edit `src/generated/db/models.py` directly.
+
+## Data Access and Service Conventions
+
+- Follow **`mdc:rules/python-fastapi/sqlalchemy-data-access.mdc`** for query construction, binding, pagination, and N+1 avoidance.
+- Use **`AsyncSession`** via `DbSession`; keep DB work in services (or small helpers), not in routers.
+- Apply **`@db_retry`** on service methods that perform I/O when using the project retry decorator.
+
+## Error Handling and Validation
+
+- Generic rules (no sensitive details in user-facing errors, security logging, log redaction): **`mdc:rules/common/security.mdc`**.
+- In Python: guard clauses and early returns; map domain failures to RFC 7807 `Problem` responses aligned with OpenAPI (using your project’s exception types).
+- Operational vs audit: **`mdc:rules/python-fastapi/application-logging.mdc`** (`structlog`) and **`mdc:rules/python-fastapi/audit-logging.mdc`** (`AuditLogger`) — not interchangeable.
+
+## FastAPI Lifecycle and Cross-Cutting Concerns
+
+- Prefer lifespan over deprecated `@app.on_event` (see FastAPI lifespan docs).
+- Middleware, DI, and OTel instrumentation: follow your service’s existing patterns (for example `core/application.py`, `core/middleware.py`, `core/config/telemetry.py`).
+- Stateful/long-running work and startup time budgets: **`mdc:rules/common/component-technical-standards.mdc`**.
+
+## Performance (Python-specific)
+
+- Do not block the event loop in `async` routes or dependencies; offload CPU-heavy work appropriately.
+- Collection endpoints: pagination/query limits align with **`mdc:rules/common/integration-standards.mdc`**; SQL patterns in **`mdc:rules/python-fastapi/sqlalchemy-data-access.mdc`**.
+- External HTTP from this service: use **`httpx`** asynchronously from `async def` code paths; do not block the event loop on sync clients.
+- New caching layers (e.g. Redis): only with approval and measurement.
+
+```python
+from fastapi import APIRouter
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.dependencies import DbSession  # replace `app` with your package name
+from app.core.exceptions import NotFoundError, ValidationError
+from app.models.book import Book
+from app.models.schemas import BookResponse
+
+router = APIRouter(prefix="/books", tags=["books"])
+
+
+async def resolve_book_by_isbn(db: AsyncSession, isbn: str) -> BookResponse:
+    if not isbn:
+        raise ValidationError("ISBN is required")
+
+    record = await db.scalar(select(Book).where(Book.isbn == isbn))
+    if record is None:
+        raise NotFoundError("Book", isbn)
+    return BookResponse.model_validate(record)
+
+
+@router.get("/{isbn}", response_model=BookResponse)
+async def get_book_by_isbn(isbn: str, db: DbSession) -> BookResponse:
+    return await resolve_book_by_isbn(db=db, isbn=isbn)
+```

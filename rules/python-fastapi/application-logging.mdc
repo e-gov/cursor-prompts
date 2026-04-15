@@ -1,0 +1,70 @@
+---
+description: Application logging with structlog (JSON/console) and request context
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# Application Logging (Python / FastAPI / structlog)
+
+## Context
+
+- Use when adding or changing **application** and **operational** logs (not compliance **audit** trails — see `mdc:rules/python-fastapi/audit-logging.mdc`).
+- The service uses **structlog** on the stdlib `logging` stack; JSON rendering is typically configured in a shared logging module (for example `<package>.core.logging.configure_logging()`) when JSON logs are enabled.
+- **Security and privacy for logs** (what must never appear in logs, auth/security event logging expectations, log injection): **`mdc:rules/common/security.mdc`** — especially *Error Handling and Logging → Security Logging*. This rule only describes **how** to apply those requirements with structlog in this repo.
+- **Structured logs with correlation IDs** (conceptual): aligns with **`mdc:rules/common/component-technical-standards.mdc`** (observability examples).
+
+## Requirements
+
+1. **API:** Use `structlog.get_logger()` (or a module-level `logger = structlog.get_logger()`). Do not use bare `print()` for operational logs.
+2. **Encoding:** UTF-8 via the configured stream handler; JSON logs use `structlog.processors.JSONRenderer()`.
+3. **Language:** English for log **event names** and stable field keys; message-style strings should stay short and structured.
+4. **Structured events:** Prefer keyword arguments — `logger.info("order_created", order_id=str(order_id))` — not f-strings or concatenation that embed raw user input (supports **log injection** defenses from **`mdc:rules/common/security.mdc`**).
+5. **Request correlation:** `RequestContextMiddleware` binds `request_id`, `client_ip`, `user_id`, `trace_id`, `span_id`, `method`, and `path` via `structlog.contextvars`. These merge into each log line when `merge_contextvars` is enabled. **Every HTTP-scoped log should run with `request_id` present** (middleware sets it from `X-Request-Id` or generates one).
+6. **Optional business context:** For a focused operation, bind extra keys with `structlog.contextvars.bind_contextvars(...)` and **remove** them in a `try`/`finally` block if they must not leak to unrelated code paths (same idea as clearing selective correlation context in other logging stacks).
+7. **Log levels (where to log):**
+   - **Request boundaries:** Middleware logs `request_started` / `request_completed` at **INFO** (do not duplicate that noise in every route).
+   - **Routers:** **WARN** for validation or client precondition failures worth noting; **DEBUG** only for non-trivial flows.
+   - **Services:** **INFO** for meaningful business events and external integration outcomes; **WARN** for handled business errors; **ERROR** for unexpected failures (include `exc_info=True` when logging an exception).
+   - **Data access:** Prefer **ERROR** (or **WARN**) only when a failure is actionable; avoid logging full query results.
+8. **OpenTelemetry:** When tracing is on, trace/span identifiers are bound in middleware; prefer OTLP instrumentation over ad-hoc trace logging in handlers.
+9. **Background work:** Scheduled or batch jobs should log **INFO** for normal progress, **WARN**/**ERROR** for failures, with a stable `eventType` or task name in the payload.
+10. **Success and failure:** Log outcomes at appropriate levels; do not swallow exceptions without an **ERROR** log at some layer.
+
+## Forbidden and sensitive data
+
+- Follow the **full** forbidden-data and redaction policy in **`mdc:rules/common/security.mdc`**.  
+- **Python-specific:** express fields as structlog **keys/values** so JSON encoding is predictable; never dump entire ORM rows or API bodies — use ids/counts only (see also **`mdc:rules/python-fastapi/sqlalchemy-data-access.mdc`**).
+
+## Critical rules (this stack)
+
+- **ALWAYS** rely on middleware-populated `request_id` (and related context) for HTTP-scoped logs.
+- **PREFER** keyword structured logging over f-strings that embed raw user input.
+- **USE** `debug`, `info`, `warn`, `error` per the level guidance above; on unexpected exceptions use `logger.exception(...)` or `exc_info=True` so stack traces exist for operators (stack traces belong in **application** logs, not audit — see audit rule).
+
+## Examples
+
+```python
+import structlog
+
+logger = structlog.get_logger()
+
+# GOOD: structured, parameterized-style fields
+logger.info("book_reserved", book_id=str(book_id), quantity=quantity)
+
+# BAD: user-controlled text in the formatted message
+logger.info(f"User query failed: {user_supplied_reason}")
+```
+
+```python
+import structlog.contextvars
+
+structlog.contextvars.bind_contextvars(object_id=str(order_id), operation="capture_payment")
+try:
+    ...
+    logger.info("payment_captured", event_result="SUCCESS")
+except Exception:
+    logger.exception("payment_capture_failed", event_result="FAILURE")
+    raise
+finally:
+    structlog.contextvars.unbind_contextvars("object_id", "operation")
+```

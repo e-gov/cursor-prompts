@@ -1,0 +1,70 @@
+---
+description: Lean Python docstrings—only where they beat names + types; deslop-aligned (no restating the obvious)
+globs: src/**/*.py
+alwaysApply: true
+---
+
+# Python Documentation Standards (FastAPI services)
+
+## Context
+
+- Applies under `src/**` (domain package and `core/` starter kit).
+- **Default:** Rely on **clear names and type hints**. Docstrings are **optional** unless they carry information that a reader cannot infer from the API surface.
+- This matches **human-maintained** style and **deslop** cleanup: do not add prose that a `/deslop` pass would strip as redundant.
+
+## Default posture (deslop-aligned)
+
+- **Do not** add a module docstring that only says what the path or filename already says (e.g. “Book REST routes” on `api/books.py`).
+- **Do not** add a class docstring that repeats the class name in sentence form (e.g. “Persisted book entity” on `Book`).
+- **Do not** add method docstrings that restate the signature or list obvious steps (“Get book by id” on `get_by_id`).
+- **Do not** add `Args:` / `Returns:` when parameters and return type are already typed and named well.
+- **Leave** package `__init__.py` files **empty** (no docstring) unless they export a documented public namespace contract.
+- **Avoid** inline comments that narrate what the next line does; only comment **why** or **non-obvious invariant** when necessary.
+
+## When a docstring *is* justified
+
+Add a short docstring (often one line, sometimes + `Raises:`) only when at least one applies:
+
+- **Non-obvious behavior:** ordering guarantees, idempotency, caching, or side effects (e.g. audit emission, extra commits).
+- **Non-obvious pre/postconditions** or **invariants** that types cannot express.
+- **`Raises:`** when multiple distinct failure modes matter for callers and are not obvious from exception types alone.
+- **Security or compliance** notes that must stay next to the code (still no secrets or PII in text).
+- **Published / reused API** consumed by other teams or packages and OpenAPI/Sphinx generation explicitly requires it.
+
+If unsure, **omit** the docstring and improve naming or types instead.
+
+## Anti-patterns (will be removed in deslop-style review)
+
+- Filler metadata: `Author:`, `Version:`, `Since:`, changelog prose.
+- Restating JVM or framework buzzwords without new information.
+- Google-style blocks (`Args:` / `Returns:`) that duplicate the signature.
+- “Coordinates X via Y and uses Z” boilerplate on every service class.
+
+## Minimal positive example
+
+```python
+async def transfer(self, cmd: TransferCommand) -> TransferResult:
+    """Debit source and credit target in one transaction; rolls back on any failure."""
+```
+
+Use `Raises:` only when it adds signal:
+
+```python
+def parse_sort(self) -> tuple[str, str]:
+    """Return field and direction; raises ValidationError if field is not allowlisted."""
+```
+
+## Cross-stack mapping (optional)
+
+| JVM-style habit | This repo |
+|-----------------|-----------|
+| Class Javadoc on every type | Usually **skip**; types + methods speak for themselves |
+| `@param` / `@return` | Prefer type hints; no duplicate prose |
+| `@throws` lists | Single-line `Raises:` **only** when helpful |
+
+## Critical rules
+
+- **DO** prefer clarity via naming and types over comments and docstrings.
+- **DO** add a docstring when behavior, failure modes, or invariants are **not** obvious from code.
+- **DO NOT** add docstrings or comments that deslop would classify as AI boilerplate or repetition of the signature/path.
+- **DO NOT** use `Author`, `Version`, `Since`, or signature-paraphrase docstrings.

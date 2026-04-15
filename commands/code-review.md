@@ -18,6 +18,9 @@ Ensure every change is checked against the workspace's full rule set so issues a
 
 2. **List Applicable Rules**
    - Collect all rule sources: always-applied rules, `.cursor/rules/**/*.mdc`, team guidelines, coding standards.
+   - If a SonarQube MCP server is available in the session, run a SonarQube scan on the target scope and include findings in this review.
+   - Map SonarQube issues by rule key/severity to the same checklist format and deduplicate overlaps with manual findings.
+   - If the SonarQube MCP server is not configured or unavailable, explicitly note this and continue with rule-based review.
    - Build a quick checklist grouped into standards, architecture, framework usage, performance, security, testing, documentation.
 
 3. **Inspect Each File**

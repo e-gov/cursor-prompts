@@ -18,7 +18,7 @@ alwaysApply: true
 ## Requirements
 
 - **Dependency Injection:** Use constructor injection for all Spring-managed dependencies.
-- **Transaction Management:** Annotate service classes with `@Transactional`. Use `@Transactional(readOnly = true)` for read-only service methods that interact with the database (even indirectly).
+- **Transaction Management:** Define transactions at service **method level** using `@Transactional`. Use `@Transactional(readOnly = true)` for read-only methods and default `@Transactional` for write operations.
 - **Input Validation:**
   - Annotate fields within request DTOs/models with Jakarta Bean Validation annotations (e.g., `@NotNull`, `@Size`, `@Pattern`, `@Email`, `@Valid` for nested objects).
   - Use the `@Valid` annotation on `@RequestBody` parameters in controller methods to trigger validation.
@@ -34,7 +34,7 @@ alwaysApply: true
 - **Async Processing:** Use `@Async` for non-blocking operations. Configure custom `TaskExecutor` beans for better thread management.
 - **Event Publishing:** Use `ApplicationEventPublisher` to publish domain events for loose coupling. Handle events with `@EventListener` methods. Consider `@TransactionalEventListener` for events that should only fire after successful transaction commits.
 - **Logging:** Use SLF4J (`org.slf4j.Logger`) for logging within application components.
-- **API Implementation:** Implement OpenAPI generated interfaces in Controllers when applicable.
+- **API Implementation:** Implement OpenAPI generated interfaces in Controllers when applicable. NEVER modify files in `src/generated/` — they are overwritten on every build.
 - **JWT Converters:** Define custom `JwtAuthenticationConverter` beans when needing specific authority extraction logic (e.g., from scopes).
 - **Controllers:** Keep controllers lean, delegating business logic to services. Use `ResponseEntity` for explicit response control.
 
@@ -78,10 +78,9 @@ alwaysApply: true
 </example>
 
 <example>
-  # Good: Constructor Injection and @Transactional in Service
+  # Good: Constructor Injection and Method-Level @Transactional in Service
   ```java
   @Service
-  @Transactional // Apply transactionality at the class level
   public class MyBusinessService {
       private final MyRepositoryAccess repository; // Could be a wrapper using jOOQ rule
       private final AnotherSpringBean anotherBean;
@@ -94,7 +93,7 @@ alwaysApply: true
           this.anotherBean = anotherBean;
       }
 
-      @Transactional(readOnly = true) // Override for read-only methods
+      @Transactional(readOnly = true) // Read operation
       public Optional<BusinessData> getBusinessData(UUID id) {
           log.info("Fetching business data for id: {}", id);
           // Assumes repository call adheres to jOOQ/DB rule (incl. retry)
@@ -102,6 +101,7 @@ alwaysApply: true
           return dataObject.map(this::mapToBusinessData);
       }
 
+      @Transactional // Write operation
       public BusinessData createBusinessData(InputData input) {
            log.info("Creating new business data");
            anotherBean.performAction();
@@ -270,7 +270,6 @@ alwaysApply: true
   # Good: Caching and Async Processing
   ```java
   @Service
-  @Transactional
   public class BookService {
       private final BookRepository repository;
       private static final Logger log = LoggerFactory.getLogger(BookService.class);
@@ -287,6 +286,7 @@ alwaysApply: true
       }
 
       @CacheEvict(value = "books", key = "#book.isbn")
+      @Transactional
       public Book updateBook(Book book) {
           log.info("Updating book: {}", book.getTitle());
           return repository.save(book);
@@ -307,20 +307,22 @@ alwaysApply: true
   # Good: Method-Level Security
   ```java
   @Service
-  @Transactional
   public class AdminBookService {
 
       @PreAuthorize("hasRole('ADMIN')")
+      @Transactional
       public void deleteAllBooks() {
           // Only admins can delete all books
       }
 
       @PreAuthorize("hasRole('ADMIN') or @bookSecurityService.isOwner(#bookId, authentication.name)")
+      @Transactional
       public void updateBook(String bookId, Book book) {
           // Admins or book owners can update
       }
 
       @PostAuthorize("returnObject.isPublic or hasRole('ADMIN')")
+      @Transactional(readOnly = true)
       public Book getBook(String bookId) {
           // Return book only if public or user is admin
           return findBook(bookId);
@@ -349,7 +351,6 @@ alwaysApply: true
 
   // Publisher Service
   @Service
-  @Transactional
   public class BookService {
       private final ApplicationEventPublisher eventPublisher;
       private final BookRepository repository;
@@ -359,6 +360,7 @@ alwaysApply: true
           this.repository = repository;
       }
 
+      @Transactional
       public Book createBook(CreateBookRequest request) {
           Book savedBook = repository.save(new Book(request.getTitle()));
           eventPublisher.publishEvent(new BookCreatedEvent(savedBook.getId(), savedBook.getTitle()));
@@ -389,7 +391,7 @@ alwaysApply: true
 ## Critical Rules
 
 - ALWAYS use constructor injection for dependencies.
-- ALWAYS apply `@Transactional` to service classes (and `readOnly=true` where applicable for query methods).
+- ALWAYS apply `@Transactional` at service method level (`readOnly=true` for query methods, default for writes).
 - ALWAYS use `@Valid` on `@RequestBody` parameters in controllers and validation annotations in DTOs.
 - ALWAYS configure security via `SecurityFilterChain` bean using lambda DSL for stateless APIs, securing non-public Actuator endpoints.
 - ALWAYS use `@ControllerAdvice` for centralized exception handling, including `MethodArgumentNotValidException`.
@@ -401,3 +403,4 @@ alwaysApply: true
 - USE `ApplicationEventPublisher` for domain events and `@EventListener` for handling; prefer `@TransactionalEventListener` for post-commit processing.
 - Ensure security configuration matches stateless JWT approach (CSRF disabled, STATELESS session).
 - Enable method security via `@EnableMethodSecurity` when using `@PreAuthorize`/`@PostAuthorize`.
+- NEVER modify generated code in `src/generated/` (jOOQ classes, OpenAPI interfaces/models) — changes are overwritten on every build.

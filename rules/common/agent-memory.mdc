@@ -1,0 +1,74 @@
+---
+description: Always consult and update persistent agent memory to prevent repeating mistakes
+globs: docs/agent-memory.md
+alwaysApply: true
+---
+# Must consult existing memory
+
+## MUST DO WITH EACH REQUEST
+
+- First action for each chat request should be to read @agent-memory.md
+- Last action for each chat should be to update @agent-memory.md if needed.
+
+## Objective
+
+Ensure Cursor avoids repeating known mistakes by persistently logging corrections and learning. All requests must reference stored knowledge in:
+
+- `docs/agent-memory.md` — for known mistakes and their fixes
+
+---
+
+## Rule: Learn from Mistakes
+
+### On Every mistake or deprecation warning
+
+1. **Detect** incorrect or suboptimal outputs.
+2. **Correct** the mistake.
+3. **Save** both mistake and correction in @agent-memory.md using the format:
+
+   ```markdown
+   ### Mistake: [Short Description]
+   **Wrong**:
+   [Insert incorrect code or logic]
+
+   **Correct**:
+   [Insert corrected code or logic]
+   ```
+
+---
+
+## Always add a step to read @agent-memory.md in your thoughts
+
+## Rule: Prevent Repetition
+
+### On Every Request
+
+- Always **read @agent-memory.md** before applying logic.
+- If a related mistake is found:
+  - **Use** the corrected approach instead.
+  - **Log** that a prior fix was applied (optional debug).
+
+---
+
+## Rule: Keep Memory Clean and Updated
+
+- If a better fix is found for an existing issue:
+  - **Update** that section in @agent-memory.md.
+- Structure the memory files with clear `###` headers.
+- Group by topic if needed.
+- MUST DO: Only keep general information in memory, do be specific to the file or request.
+- MUST DO: Avoid storing one-off, file-specific details that are unlikely to be reusable.
+- MUST DO: Information saved in memory should be useful and reusable.
+
+---
+
+## Storage Paths
+
+- `docs/agent-memory.md`: Persistent log of mistakes and their fixes
+
+---
+
+## Enforcement
+
+- Failing to read or update memory files after a mistake is a **critical error**.
+- All requests must use and comply with stored knowledge.

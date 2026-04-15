@@ -13,92 +13,116 @@ alwaysApply: false
 
 ## Requirements
 1.  **Extend Base Class:** Service classes performing database operations that should be retried MUST extend `{base.package}.service.common.AbstractDatabaseService`.
-2.  **Constructor Injection:** Services extending `AbstractDatabaseService` MUST receive `DSLContext` and `RetryTemplate` via constructor injection and pass them to the `super(dsl, retryTemplate)` constructor.
-3.  **Use `executeWithRetry`:** ALL individual database operations (e.g., `select`, `fetch`, `store`, `delete`, `execute`) within these services MUST be wrapped in the `executeWithRetry(String operationName, DatabaseOperation<T> operation)` method provided by the base class. The lambda passed to this method should contain the actual jOOQ database interaction code.
-4.  **Provide Operation Name:** A meaningful, unique `operationName` string (typically matching the service method name or the specific action) MUST be provided as the first argument to `executeWithRetry` for clear logging and error reporting.
-5.  **Use Logging Helpers (Optional):** The base class provides `logOperationStart(String operation, String details)` and `logOperationSuccess(String operation, String details)` helpers. These can be used for *additional* debug-level logging outside the `executeWithRetry` lambda if needed, but `executeWithRetry` already handles INFO-level start/success logging and ERROR-level failure logging.
-6.  **Exception Handling:**
-    *   Understand that `executeWithRetry` will handle configured retryable exceptions (e.g., `SQLException`, `DataAccessException`, `SQLRecoverableException` based on `RetryConfig`).
-    *   If all retries are exhausted, `executeWithRetry` wraps the last thrown exception in a `{base.package}.exception.DatabaseRetryException`.
-    *   Service methods should generally allow `DatabaseRetryException` (and other non-retryable exceptions thrown within the lambda) to propagate upwards to be handled by the `GlobalExceptionHandler`.
-7.  **Configuration:** Do not hardcode retry attempts or backoff periods. Rely on the centrally configured `RetryTemplate` which uses settings from `DatabaseRetryProperties` (defined in `application.yml`).
+2.  **Constructor Injection:** Services extending `AbstractDatabaseService` MUST receive `DSLContext`, `RetryTemplate`, and `PlatformTransactionManager` via constructor injection and pass them to the `super(dsl, retryTemplate, txManager)` constructor.
+3.  **Use Retry Methods:** ALL individual database operations within these services MUST be wrapped in one of the retry methods provided by the base class:
+    - `executeWithRetry(String operationName, DatabaseOperation<T> operation)` — for **write** operations
+    - `executeReadOnlyWithRetry(String operationName, DatabaseOperation<T> operation)` — for **read-only** operations (uses a read-only `TransactionTemplate`)
+4.  **No `@Transactional` on Methods:** Do NOT annotate service methods with `@Transactional`. Transactions are managed **programmatically** inside each retry attempt using `TransactionTemplate` with `PROPAGATION_REQUIRES_NEW`. Each attempt gets a fresh transaction and connection, preventing poisoned-connection reuse after failures.
+5.  **Provide Operation Name:** A meaningful, unique `operationName` string (typically matching the service method name or the specific action) MUST be provided as the first argument for clear logging and error reporting.
+6.  **Use Logging Helpers (Optional):** The base class provides `logOperationStart(String operation, String details)` and `logOperationSuccess(String operation, String details)` helpers. These can be used for *additional* debug-level logging outside the retry lambda if needed, but `executeWithRetry`/`executeReadOnlyWithRetry` already handles INFO-level start/success logging and ERROR-level failure logging.
+7.  **Exception Handling:**
+    *   Only transient database errors are retried. The recoverable SQLState classification is centralised in `PostgreSQLExceptionOverride.isRecoverableState(String)`:
+        - `08xxx` — Connection exceptions (connection lost, timeout)
+        - `57Pxx` — Operator intervention (admin shutdown, failover)
+        - `40xxx` — Transaction rollback (serialization failure, deadlock)
+        - `53xxx` — Insufficient resources (out of memory, too many connections)
+        - `25006` — Read-only transaction (PostgreSQL failover)
+    *   Non-recoverable errors (constraint violations `23xxx`, syntax errors `42xxx`, data errors `22xxx`) are **not** retried.
+    *   If all retries are exhausted, the retry method wraps the last thrown exception in a `{base.package}.exception.DatabaseRetryException`.
+    *   Service methods should generally allow `DatabaseRetryException` to propagate upwards to be handled by the `GlobalExceptionHandler`.
+8.  **HikariCP Connection Eviction:** `PostgreSQLExceptionOverride` implements `SQLExceptionOverride` and returns `MUST_EVICT` for recoverable SQLStates, ensuring stale connections are removed from the pool before the next retry acquires a fresh one. When adding new recoverable SQLStates, update only `isRecoverableState()`.
+9.  **Configuration:** Do not hardcode retry attempts or backoff periods. Rely on the centrally configured `RetryTemplate` which uses settings from `DatabaseRetryProperties` (defined in `application.yml`):
+    ```yaml
+    database:
+      retry:
+        max-attempts: ${DB_RETRY_MAX_ATTEMPTS:3}
+        initial-interval: ${DB_RETRY_INITIAL_INTERVAL:500}
+        multiplier: ${DB_RETRY_MULTIPLIER:2.0}
+        max-interval: ${DB_RETRY_MAX_INTERVAL:10000}
+        timeout: ${DB_RETRY_TIMEOUT:30000}
+    ```
 
 ## Examples
 
 <example>
-# Good: Extending AbstractDatabaseService and using executeWithRetry
+# Good: Extending AbstractDatabaseService with read and write operations
 ```java
 @Service
 public class BookService extends AbstractDatabaseService {
 
-    // Constructor injection required
-    public BookService(DSLContext dsl, RetryTemplate retryTemplate, AuditLogger auditLogger) {
-        super(dsl, retryTemplate); // Pass dsl and retryTemplate to super
-        // ... other dependencies
+    public BookService(
+            DSLContext dsl,
+            RetryTemplate retryTemplate,
+            PlatformTransactionManager txManager) {
+        super(dsl, retryTemplate, txManager);
     }
 
-    @Transactional(readOnly = true)
+    // Read-only — uses executeReadOnlyWithRetry, NO @Transactional
     public Optional<BookResponse> findBookById(UUID id) {
-        // Optional: Additional debug logging before retry block
         logOperationStart("findBookById", "Finding book with ID: " + id);
-        
-        // Wrap DB operation in executeWithRetry
-        Optional<BookResponse> book = executeWithRetry("findBookById", () -> 
-            dsl.selectFrom(BOOK) // Actual DB interaction inside lambda
+
+        Optional<BookResponse> book = executeReadOnlyWithRetry("findBookById", () ->
+            dsl.selectFrom(BOOK)
                 .where(BOOK.ID.eq(id))
                 .fetchOptional()
                 .map(this::mapToBookResponse)
         );
-        
-        // Optional: Additional debug logging after retry block
-        if (book.isPresent()) {
-            logOperationSuccess("findBookById", "Found book ID: " + id);
-        } else {
-            logOperationSuccess("findBookById", "Book not found ID: " + id);
-        }
-        
+
+        logOperationSuccess("findBookById",
+                book.isPresent() ? "Found book ID: " + id : "Book not found ID: " + id);
         return book;
+    }
+
+    // Write — uses executeWithRetry, NO @Transactional
+    public BookResponse createBook(Book bookRequest) {
+        logOperationStart("createBook", "Creating new book");
+
+        return executeWithRetry("createBook", () -> {
+            BookRecord record = dsl.newRecord(BOOK);
+            record.setId(UUID.randomUUID());
+            record.setTitle(bookRequest.getTitle());
+            record.setAuthor(bookRequest.getAuthor());
+            record.store();
+            return mapToBookResponse(record);
+        });
     }
 }
 ```
-*Explanation:* Service extends `AbstractDatabaseService`, uses constructor injection, and wraps the jOOQ `select/fetch` operation within `executeWithRetry`, providing an operation name.
+*Explanation:* 3-arg constructor passes `txManager` to super. Read uses `executeReadOnlyWithRetry`, write uses `executeWithRetry`. No `@Transactional` — transactions are managed programmatically per retry attempt.
 </example>
 
 <example type="invalid">
-# Bad: Not using executeWithRetry
+# Bad: Missing base class, retry wrapper, and using @Transactional
 ```java
 @Service
-// Missing extends AbstractDatabaseService
 public class BadBookService {
 
     private final DSLContext dsl;
-    // Missing RetryTemplate injection
 
     public BadBookService(DSLContext dsl) {
         this.dsl = dsl;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true) // Wrong — tx should be managed by AbstractDatabaseService
     public Optional<BookResponse> findBookById(UUID id) {
         // ERROR: Direct DSL usage without retry wrapper
         Optional<BookRecord> recordOpt = dsl.selectFrom(BOOK)
                 .where(BOOK.ID.eq(id))
                 .fetchOptional();
-        
-        // This operation will not retry on transient DB errors.
-        return recordOpt.map(this::mapToBookResponse); 
+        return recordOpt.map(this::mapToBookResponse);
     }
-    
-    // Helper method assumed
+
     private BookResponse mapToBookResponse(BookRecord record) { return null; }
 }
 ```
-*Explanation:* Service does not extend `AbstractDatabaseService` and directly uses `DSLContext` without wrapping the database call in `executeWithRetry`. Transient database errors during the `fetchOptional` call will not be retried.
+*Explanation:* Missing `extends AbstractDatabaseService`, missing 3-arg constructor, direct `DSLContext` usage without retry wrapper, and `@Transactional` annotation instead of programmatic transactions. Transient errors will not be retried and stale connections will not rotate.
 </example>
 
 ## Critical Rules
 - **ALWAYS** extend `AbstractDatabaseService` for service classes performing database operations that require retry capability.
-- **ALWAYS** wrap individual database interactions (select, fetch, store, delete, execute, etc.) within the `executeWithRetry` method.
-- **ALWAYS** provide a meaningful `operationName` to `executeWithRetry`.
-- **NEVER** perform raw database operations directly using the injected `DSLContext` instance within services extending `AbstractDatabaseService`; use the `executeWithRetry` wrapper.
-- **ENSURE** `DSLContext` and `RetryTemplate` are injected via the constructor and passed to `super()`.
+- **ALWAYS** use `executeReadOnlyWithRetry` for read operations and `executeWithRetry` for write operations.
+- **ALWAYS** provide a meaningful `operationName` to the retry method.
+- **NEVER** annotate service methods with `@Transactional` when extending `AbstractDatabaseService` — transactions are managed programmatically per retry attempt.
+- **NEVER** perform raw database operations directly using `DSLContext` outside the retry wrapper.
+- **ENSURE** `DSLContext`, `RetryTemplate`, and `PlatformTransactionManager` are injected via the constructor and passed to `super()`.
+- **ENSURE** new recoverable SQLStates are added only in `PostgreSQLExceptionOverride.isRecoverableState()` — both HikariCP eviction and the retry predicate delegate to it.

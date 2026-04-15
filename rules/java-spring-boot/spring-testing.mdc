@@ -21,12 +21,13 @@ alwaysApply: true
 1. **Test Strategy:** Prefer integration tests against the API first, then unit tests with mocks for specific logic testing
 2. **Test Structure:** Use appropriate Spring Boot test slices (`@WebMvcTest`, `@DataJpaTest`, `@JsonTest`, etc.)
 3. **Integration Tests:** Use `@SpringBootTest` with TestContainers for full integration testing
-4. **Mocking:** Use `@MockBean` for Spring beans, `@Mock` for regular dependencies
+4. **Mocking:** Use `@Mock` + `@InjectMocks` for unit tests. Use `@MockitoBean` in Spring test slices when bean replacement is necessary
 5. **Test Profiles:** Use `@ActiveProfiles("test")` for test-specific configuration
 6. **Database Testing:** Use TestContainers with PostgreSQL for realistic database testing
 7. **Web Layer Testing:** Use MockMvc for controller testing with proper content type assertions
 8. **Base Test Classes:** Use inheritance for shared test infrastructure and common setup
 9. **TestContainers Configuration:** Use singleton pattern with `@ServiceConnection` for container reuse
+10. **External HTTP APIs:** Use WireMock for mocking external HTTP dependencies in tests 
 
 ## Examples
 
@@ -243,7 +244,7 @@ class BookControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private BookService bookService;
 
     @Test
@@ -308,11 +309,14 @@ class MyControllerSecurityTest {
 - **ALWAYS** use appropriate test slices (`@WebMvcTest`, `@DataJpaTest`) for focused testing
 - **ALWAYS** use TestContainers for integration tests requiring databases
 - **ALWAYS** use `@ActiveProfiles("test")` for test configuration
+- **ALWAYS** use `@Mock` + `@InjectMocks` for unit tests
 - **ALWAYS** extend base test classes for integration tests to reuse common infrastructure
 - **PREFER** singleton TestContainers pattern with `@ServiceConnection` for better performance
 - **USE** `@Import(TestcontainersConfiguration.class)` for consistent container setup
+- **USE** `@MockitoBean` in Spring test slices when a bean replacement is required
 - **USE** `PostgreSQLContainer` (no generic type) for Testcontainers 2.x / Spring Boot 4+ compatibility. For Spring Boot 3.5, use `PostgreSQLContainer<?>` (with generic)
 - **USE** `TestRestTemplate` from `org.springframework.boot.resttestclient.TestRestTemplate` with `@AutoConfigureTestRestTemplate` and `TestRestTemplateAutoConfiguration` for Spring Boot 4+ integration tests. For Spring Boot 3.5, use `TestRestTemplate` from `org.springframework.boot.test.web.client.TestRestTemplate` without auto-configuration annotations
+- **USE** WireMock to mock external HTTP APIs in tests
 - **MOCK** jOOQ DSL chains properly with type-safe mocking patterns
 - **CREATE** custom security contexts for JWT testing when needed
 - **IMPLEMENT** base test classes for shared test infrastructure
