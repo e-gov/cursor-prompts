@@ -1,6 +1,6 @@
 # Cursor Rules & Prompts
 
-A collection of **Cursor AI rules**, **agent configurations**, and **reusable commands** for building enterprise-grade applications. Designed for teams working with Java/Spring Boot backends and Nuxt/Vue frontends.
+A collection of **Cursor AI rules**, **agent configurations**, and **reusable commands** for building enterprise-grade applications. Designed for teams working with Java, TypeScript, Python/FastAPI, and Nuxt/Vue stacks.
 
 ## What's Included
 
@@ -10,9 +10,12 @@ Cursor rules (`.mdc` files) that automatically apply coding standards, security 
 
 | Category | Rules | Description |
 | :------- | :---- | :---------- |
-| **Common** | `security.mdc`<br>`component-technical-standards.mdc`<br>`integration-standards.mdc` | Language-agnostic security best practices (OWASP), component design standards, and integration patterns |
+| **Common** | `security.mdc`<br>`component-technical-standards.mdc`<br>`integration-standards.mdc`<br>`agent-memory.mdc` | Language-agnostic security best practices (OWASP), component design standards, integration patterns, and shared agent memory |
 | **Java** | `java-code-standards.mdc`<br>`application-logging.mdc`<br>`audit-logging.mdc`<br>`jooq-database-access.mdc` | Java 21+ code style, SLF4J logging conventions, audit trail patterns, and type-safe database access with jOOQ |
 | **Spring Boot** | `spring-conventions.mdc`<br>`spring-retry-conventions.mdc`<br>`spring-testing.mdc` | Spring Boot patterns, resilience with retry/circuit breakers, and testing with TestContainers |
+| **TypeScript Common** | `typescript-code-standards.mdc`<br>`application-logging.mdc`<br>`audit-logging.mdc` | TypeScript conventions, structured logging, and audit-ready implementation patterns |
+| **TypeScript Nuxt** | `nuxt-conventions.mdc` | Nuxt and Vue conventions for frontend architecture, data loading, and localization |
+| **Python FastAPI** | `application-logging.mdc`<br>`audit-logging.mdc`<br>`fastapi-specific.mdc`<br>`python-documentation-standards.mdc`<br>`sqlalchemy-data-access.mdc` | FastAPI style, API behavior guidance, logging and audit patterns, documentation standards, and SQLAlchemy usage |
 
 ### 🤖 Agents (`agents/`)
 
@@ -31,6 +34,9 @@ Reusable prompt templates for common development tasks. Copy and paste into Curs
 | :------ | :------ |
 | `code-review.md` | Structured code review workflow with severity levels and fix prioritization |
 | `deslop.md` | Remove AI-generated "slop" (unnecessary comments, defensive code, type bypasses) |
+| `security-check.md` | Security-oriented review checklist and threat-focused validation suggestions |
+| `simplify-code.md` | Simplify complex implementations and reduce unnecessary complexity |
+| `verify.md` | Practical validation checklist for reviews, refactors, and changes before merge |
 
 ## Installation
 
@@ -44,7 +50,11 @@ cp -r rules/* your-project/.cursor/rules/
 
 # Or copy specific categories
 cp -r rules/common/* your-project/.cursor/rules/
+cp -r rules/java-common/* your-project/.cursor/rules/
 cp -r rules/java-spring-boot/* your-project/.cursor/rules/
+cp -r rules/typescript-common/* your-project/.cursor/rules/
+cp -r rules/typescript-nuxt/* your-project/.cursor/rules/
+cp -r rules/python-fastapi/* your-project/.cursor/rules/
 ```
 
 ### Option 2: Copy Agent Configuration
@@ -107,21 +117,37 @@ cursor-prompts/
 │       └── AGENTS.md          # Nuxt/Vue agent configuration
 ├── commands/                  # Reusable prompt templates
 │   ├── code-review.md
-│   └── deslop.md
+│   ├── deslop.md
+│   ├── security-check.md
+│   ├── simplify-code.md
+│   └── verify.md
 ├── rules/
 │   ├── common/                # Language-agnostic standards
 │   │   ├── component-technical-standards.mdc
 │   │   ├── integration-standards.mdc
-│   │   └── security.mdc
+│   │   ├── security.mdc
+│   │   └── agent-memory.mdc
 │   ├── java-common/           # Java-specific standards
 │   │   ├── application-logging.mdc
 │   │   ├── audit-logging.mdc
 │   │   ├── java-code-standards.mdc
 │   │   └── jooq-database-access.mdc
-│   └── java-spring-boot/      # Spring Boot standards
-│       ├── spring-conventions.mdc
-│       ├── spring-retry-conventions.mdc
-│       └── spring-testing.mdc
+│   ├── java-spring-boot/      # Spring Boot standards
+│   │   ├── spring-conventions.mdc
+│   │   ├── spring-retry-conventions.mdc
+│   │   └── spring-testing.mdc
+│   ├── python-fastapi/        # Python + FastAPI standards
+│   │   ├── application-logging.mdc
+│   │   ├── audit-logging.mdc
+│   │   ├── fastapi-specific.mdc
+│   │   ├── python-documentation-standards.mdc
+│   │   └── sqlalchemy-data-access.mdc
+│   ├── typescript-common/     # TypeScript conventions
+│   │   ├── application-logging.mdc
+│   │   ├── audit-logging.mdc
+│   │   └── typescript-code-standards.mdc
+│   └── typescript-nuxt/       # Nuxt front-end standards
+│       └── nuxt-conventions.mdc
 ├── LICENSE
 └── README.md
 ```
