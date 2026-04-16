@@ -17,6 +17,14 @@ Cursor rules (`.mdc` files) that automatically apply coding standards, security 
 | **TypeScript Nuxt** | `nuxt-conventions.mdc` | Nuxt and Vue conventions for frontend architecture, data loading, and localization |
 | **Python FastAPI** | `application-logging.mdc`<br>`audit-logging.mdc`<br>`fastapi-specific.mdc`<br>`python-documentation-standards.mdc`<br>`sqlalchemy-data-access.mdc` | FastAPI style, API behavior guidance, logging and audit patterns, documentation standards, and SQLAlchemy usage |
 
+### 📚 Process (`process/`)
+
+Guidance for specification-led work is in `process/`:
+
+| File | Purpose |
+| :--- | :------ |
+| `specification-driven-development.md` | Method for writing precise specifications for predictable AI-assisted development |
+
 ### 🤖 Agents (`agents/`)
 
 `AGENTS.md` files that define AI assistant personas for specific tech stacks. These provide project-specific commands, boundaries, and workflows.
@@ -24,6 +32,7 @@ Cursor rules (`.mdc` files) that automatically apply coding standards, security 
 | Agent | Stack | Key Features |
 | :---- | :---- | :----------- |
 | **Java** | Spring Boot 4 + Java 21 | jOOQ, Flyway migrations, OpenAPI code generation, Gradle workflows |
+| **Python** | FastAPI + Python 3.14 | Contract-first generation flow, explicit validation gates, environment and migration guidance |
 | **Nuxt** | Nuxt 4 + Vue 3 + TypeScript | Orval API client, i18n, Vitest testing, TanStack Query |
 
 ### 💬 Commands (`commands/`)
@@ -67,6 +76,9 @@ cp agents/java/AGENTS.md your-project/AGENTS.md
 
 # For Nuxt projects
 cp agents/nuxt/AGENTS.md your-project/AGENTS.md
+
+# For Python/FastAPI projects
+cp agents/python/AGENTS.md your-project/AGENTS.md
 ```
 
 ## How It Works
@@ -113,6 +125,8 @@ cursor-prompts/
 ├── agents/
 │   ├── java/
 │   │   └── AGENTS.md          # Spring Boot agent configuration
+│   ├── python/
+│   │   └── AGENTS.md          # FastAPI agent configuration
 │   └── nuxt/
 │       └── AGENTS.md          # Nuxt/Vue agent configuration
 ├── commands/                  # Reusable prompt templates
@@ -148,6 +162,8 @@ cursor-prompts/
 │   │   └── typescript-code-standards.mdc
 │   └── typescript-nuxt/       # Nuxt front-end standards
 │       └── nuxt-conventions.mdc
+├── process/                   # Team process documentation
+│   └── specification-driven-development.md
 ├── LICENSE
 └── README.md
 ```
